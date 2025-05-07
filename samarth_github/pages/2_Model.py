@@ -128,7 +128,6 @@ def ramachandran_region_analysis(phi_psi_list):
     }
 
 def show_3d_structure(pdb_data, style='cartoon', highlight_ligands=True):
-    # Use py3Dmol and st.components.v1.html
     view = py3Dmol.view(width=800, height=500)
     view.addModel(pdb_data, 'pdb')
     if style == 'cartoon':
@@ -142,7 +141,6 @@ def show_3d_structure(pdb_data, style='cartoon', highlight_ligands=True):
         view.addStyle({'hetflag': True}, {'stick': {'colorscheme': 'greenCarbon', 'radius': 0.3}})
     view.zoomTo()
     view.setBackgroundColor('white')
-    # Render in Streamlit
     st.components.v1.html(view._make_html(), height=500, width=800)
 
 # ---- Mutation Simulator Helper ----
@@ -170,7 +168,6 @@ def mutate_residue_in_pdb(pdb_data, chain_id, resnum, new_resname):
         else:
             mutated_lines.append(line)
     return "\n".join(mutated_lines)
-
 
 # ----------------------
 # UI Components
@@ -204,8 +201,6 @@ def sidebar_controls():
 # ----------------------
 def home_page():
     st.title("HOME PAGE")
-
-    # Section 1: Overview of the App
     st.header("Overview of the App")
     st.markdown("""
     **Protein Molecule Mosaic** is an interactive web application for exploring and analyzing protein structures (PDB files).
@@ -225,15 +220,13 @@ def home_page():
     - User-friendly sidebar controls
     """)
 
-    # Section 2: About Me
     st.header("About Me")
     st.markdown("""
     **Samarth Satalinga Kittad**
 
-    A passionate developer and computer aided durg disocvery enthusiast.  
+    A passionate developer and computer aided drug discovery enthusiast.  
     I created this app to make protein analysis accessible, interactive, and visually engaging for students, researchers, and anyone curious about structural biology!
     """)
-
 
 # ----------------------
 # Main App Logic
@@ -286,7 +279,9 @@ def main():
                     """)
                 else:
                     st.warning("Unable to generate Ramachandran plot. Please check the PDB input.")
-             with st.expander("🧬 Mutation Simulator (In Silico)"):
+
+            # --- Mutation Simulator ---
+            with st.expander("🧬 Mutation Simulator (In Silico)"):
                 parser = PDBParser(QUIET=True)
                 structure = parser.get_structure("temp", StringIO(pdb_data))
                 residues = [
@@ -333,6 +328,7 @@ def main():
                             st.warning("Unable to generate Ramachandran plot for mutated structure.")
                 else:
                     st.info("No residues found for mutation.")
+
     with col2:
         st.header("Protein Dynamics")
         if pdb_data:
@@ -354,3 +350,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
