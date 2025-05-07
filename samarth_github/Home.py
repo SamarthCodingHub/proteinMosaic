@@ -107,6 +107,20 @@ def home_page():
     [Connect on LinkedIn](https://www.linkedin.com/in/dr-kushagra-kashyap-b230a3bb/)
     """)
 
+     # Future Improvements Section
+    st.markdown("---")
+    st.header("🚀 Future Improvements")
+    st.markdown("""
+        **Exciting features coming soon:**
+
+        - **Protein-Ligand Docking:**  
+          Perform interactive protein-ligand docking directly in the app. Predict how small molecules bind to your protein and visualize the binding poses.
+
+        - **Molecular Dynamics (MD) Simulation Analysis:**  
+          Analyze and visualize MD simulation trajectories to study protein flexibility, stability, and conformational changes over time.
+
+        Stay tuned for updates! Follow the project on [GitHub](https://github.com/samarthskittad) for the latest developments. 🚀
+        """) 
     # Feedback Link
     st.markdown("💬 [Send Feedback](mailto:samarthkittad8088@gmail.com?subject=Protein%20Molecule%20Mosaic%20Feedback)")
     
