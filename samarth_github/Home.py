@@ -5,9 +5,6 @@ def home_page():
     st.markdown("<h1 style='text-align: center; color: #FF6F61;'>🧬 Protein Molecule Mosaic 🧬</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center; color: #A7FFEB;'>Explore and analyze protein structures interactively!</h3>", unsafe_allow_html=True)
 
-    # Animated Welcome (using st.balloons or st.snow for fun)
-    st.balloons()
-
     # Columns for Objectives & Features
     col1, col2 = st.columns(2)
     with col1:
@@ -30,16 +27,8 @@ def home_page():
         - Sidebar controls
         """)
 
-    # Interactive Demo Section
+    # Educational Expander about PDB files
     st.markdown("---")
-    st.markdown("#### 🎁 Try it now! Upload a sample PDB file to preview:")
-    uploaded_file = st.file_uploader("Choose a PDB file", type=["pdb"])
-    if uploaded_file is not None:
-        st.success("✅ File uploaded! Go to the Model page for analysis.")
-        st.write(f"**Filename:** `{uploaded_file.name}`")
-        st.info("Tip: On the Model page, you can visualize and analyze your structure!")
-
-    # Fun Expander for More Info
     with st.expander("ℹ️ What is a PDB file?"):
         st.write("""
         A PDB file contains 3D structural data of proteins and other biological molecules.  
@@ -58,11 +47,6 @@ def home_page():
     [![GitHub](https://img.shields.io/badge/GitHub-Profile-informational?style=flat&logo=github)](https://github.com/samarthskittad)
     """)
 
-    # Call to Action Button
-    st.markdown("---")
-    if st.button("🚀 Go to Model Page"):
-        st.success("Navigate to the Model page using the sidebar!")
-
     # Optional: Add a nice footer
     st.markdown(
         "<hr style='border: 1px solid #A7FFEB;'>"
@@ -71,6 +55,3 @@ def home_page():
     )
 
 home_page()
-
-
-
