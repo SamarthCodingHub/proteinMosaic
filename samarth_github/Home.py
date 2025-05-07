@@ -66,10 +66,10 @@ def home_page():
         """)
 
      with st.sidebar:
-    st.markdown("### 🖼️ Protein Gallery")
-    if st.button("Load Hemoglobin (1A3N)"):
+        st.markdown("### 🖼️ Protein Gallery")
+        if st.button("Load Hemoglobin (1A3N)"):
         st.session_state['pdb_id'] = "1A3N"
-    if st.button("Load Insulin (4INS)"):
+        if st.button("Load Insulin (4INS)"):
         st.session_state['pdb_id'] = "4INS"
     # Use st.session_state['pdb_id'] in your main input
 
