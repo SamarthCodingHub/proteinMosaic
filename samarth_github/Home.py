@@ -1,35 +1,76 @@
-
 import streamlit as st
 
 def home_page():
-    st.title("HOME PAGE")
-    st.header("Overview of the App")
+    # Eye-catching Title with Emoji
+    st.markdown("<h1 style='text-align: center; color: #FF6F61;'>🧬 Protein Molecule Mosaic 🧬</h1>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: #A7FFEB;'>Explore and analyze protein structures interactively!</h3>", unsafe_allow_html=True)
+
+    # Animated Welcome (using st.balloons or st.snow for fun)
+    st.balloons()
+
+    # Columns for Objectives & Features
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("🎯 Objectives")
+        st.markdown("""
+        - **Accessible** protein structure visualization  
+        - **Upload** or fetch PDB files  
+        - **Classify** ligands & predict active sites  
+        - **Ramachandran plot** generation
+        """)
+
+    with col2:
+        st.subheader("✨ Features")
+        st.markdown("""
+        - 3D visualization (cartoon, surface, sphere)  
+        - Upload or fetch by PDB ID  
+        - Ligand classification  
+        - Active site prediction  
+        - Ramachandran plot analysis  
+        - Sidebar controls
+        """)
+
+    # Interactive Demo Section
+    st.markdown("---")
+    st.markdown("#### 🎁 Try it now! Upload a sample PDB file to preview:")
+    uploaded_file = st.file_uploader("Choose a PDB file", type=["pdb"])
+    if uploaded_file is not None:
+        st.success("✅ File uploaded! Go to the Model page for analysis.")
+        st.write(f"**Filename:** `{uploaded_file.name}`")
+        st.info("Tip: On the Model page, you can visualize and analyze your structure!")
+
+    # Fun Expander for More Info
+    with st.expander("ℹ️ What is a PDB file?"):
+        st.write("""
+        A PDB file contains 3D structural data of proteins and other biological molecules.  
+        You can get sample files from the [RCSB PDB](https://www.rcsb.org/) website.
+        """)
+
+    # About Me Section with Social Links
+    st.markdown("---")
+    st.header("👨‍💻 About Me")
+    st.image("https://avatars.githubusercontent.com/u/203984900?v=4", width=120)
     st.markdown("""
-    **Protein Molecule Mosaic** is an interactive web application for exploring and analyzing protein structures (PDB files).
+    **Samarth Satalinga Kittad**  
+    Passionate developer & computer-aided drug discovery enthusiast.  
+    I created this app to make protein analysis accessible, interactive, and visually engaging for everyone!
 
-    ### Objectives:
-    - Make protein structure visualization accessible and interactive
-    - Allow users to upload or fetch PDB files for analysis
-    - Identify and classify ligands and predict active sites
-    - Generate and analyze Ramachandran plots
-
-    ### Features:
-    - 3D visualization of protein structures (cartoon, surface, sphere)
-    - Upload PDB files or fetch by PDB ID
-    - Ligand classification (ion, monodentate, polydentate)
-    - Active site prediction based on catalytic residues
-    - Ramachandran plot generation with region analysis
-    - User-friendly sidebar controls
+    [![GitHub](https://img.shields.io/badge/GitHub-Profile-informational?style=flat&logo=github)](https://github.com/samarthskittad)
     """)
 
-    st.header("About Me")
-    st.image("https://avatars.githubusercontent.com/u/203984900?v=4", width=150)
-    st.markdown("""
-    **Samarth Satalinga Kittad**
-    
-  
-    A passionate developer and computer aided drug discovery enthusiast.  
-    I created this app to make protein analysis accessible, interactive, and visually engaging for students, researchers, and anyone curious about structural biology!
-    """)
+    # Call to Action Button
+    st.markdown("---")
+    if st.button("🚀 Go to Model Page"):
+        st.success("Navigate to the Model page using the sidebar!")
+
+    # Optional: Add a nice footer
+    st.markdown(
+        "<hr style='border: 1px solid #A7FFEB;'>"
+        "<p style='text-align: center; color: #A7FFEB;'>Made with ❤️ using Streamlit</p>",
+        unsafe_allow_html=True
+    )
 
 home_page()
+
+
+
