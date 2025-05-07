@@ -24,6 +24,7 @@ def home_page():
         1. Go to the **Model** page using the sidebar.
         2. Upload your PDB file or enter a PDB ID.
         3. Explore interactive 3D visualization and analysis tools!
+        4. Try the **Mutation Simulator** to mutate residues and see the effects instantly!
         """)
 
     # Fun Fact
@@ -37,7 +38,8 @@ def home_page():
         - **Accessible** protein structure visualization  
         - **Upload** or fetch PDB files  
         - **Classify** ligands & predict active sites  
-        - **Ramachandran plot** generation
+        - **Ramachandran plot** generation  
+        - **Simulate mutations** and analyze structural impact
         """)
 
     with col2:
@@ -48,6 +50,7 @@ def home_page():
         - Ligand classification  
         - Active site prediction  
         - Ramachandran plot analysis  
+        - **Mutation Simulator**: mutate any residue and instantly view effects  
         - Sidebar controls
         """)
 
@@ -83,4 +86,6 @@ def home_page():
         unsafe_allow_html=True
     )
 
-home_page()
+# Only run if this script is executed directly
+if __name__ == "__main__":
+    home_page()
