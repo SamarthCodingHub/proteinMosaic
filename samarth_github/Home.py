@@ -95,13 +95,25 @@ def home_page():
     [![LinkedIn](https://img.shields.io/badge/LinkedIn-blue?logo=linkedin)](https://www.linkedin.com/in/your-linkedin-profile)
     """)
 
+    # Acknowledgements Section
+    st.markdown("---")
+    st.header("🌟 Mentorship & Acknowledgements")
+    st.markdown("""
+    Special gratitude to **Dr. Kushagra Kashyap**,  
+    *Assistant Professor (Bioinformatics), Department of Life Sciences, DES Pune University*.
+
+    Dr. Kashyap’s mentorship has been instrumental in shaping this project. His guidance, expertise in bioinformatics, and thoughtful feedback brought clarity and depth, fostering both learning and innovation throughout
+
+    [Connect on LinkedIn](https://www.linkedin.com/in/kushagra-kashyap-9b1a8b1b5/)
+    """)
+
     # Feedback Link
     st.markdown("💬 [Send Feedback](mailto:samarthkittad8088@gmail.com?subject=Protein%20Molecule%20Mosaic%20Feedback)")
-
+    
     # Footer
     st.markdown(
         "<hr style='border: 1px solid #A7FFEB;'>"
-        "<p style='text-align: center; color: #A7FFEB;'>Made with ❤️ by Samarth Satalinga Kittad | 2025</p>",
+        "<p style='text-align: center; color: #A7FFEB;'>Made with ❤️ by Samarth Satalinga Kittad a passionate bioinformatics student | 2025</p>",
         unsafe_allow_html=True
     )
 
