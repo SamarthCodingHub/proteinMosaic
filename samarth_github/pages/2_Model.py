@@ -354,11 +354,11 @@ def main():
                     st.info("No residues found for mutation.")
    
     with st.expander("Active Sites"):
-    active_sites = predict_active_sites(pdb_data)
-    st.write(f"**Predicted Active Sites Near Ligands ({len(active_sites)} residues):**")
+        active_sites = predict_active_sites(pdb_data)
+        st.write(f"**Predicted Active Sites Near Ligands ({len(active_sites)} residues):**")
     for site in active_sites:
         st.write(f"{site['resname']} Chain {site['chain']} Residue {site['resnum']} (Distance: {site['distance']})")
-    st.info("Active sites are predicted catalytic residues (HIS, ASP, GLU, SER, CYS, LYS, TYR, ARG) within 3 Å of any ligand.")
+        st.info("Active sites are predicted catalytic residues (HIS, ASP, GLU, SER, CYS, LYS, TYR, ARG) within 3 Å of any ligand.")
     
     with col2:
         st.header("Protein Dynamics")
