@@ -145,7 +145,31 @@ def show_3d_structure(pdb_data, style='cartoon', highlight_ligands=True):
     # Render in Streamlit
     st.components.v1.html(view._make_html(), height=500, width=800)
 
-
+# ---- Mutation Simulator Helper ----
+def mutate_residue_in_pdb(pdb_data, chain_id, resnum, new_resname):
+    """
+    Naively change the residue name in the PDB file for a given chain and residue number.
+    Only for educational/demo purposes!
+    """
+    lines = pdb_data.splitlines()
+    mutated_lines = []
+    for line in lines:
+        if line.startswith("ATOM") or line.startswith("HETATM"):
+            line_chain = line[21]
+            try:
+                line_resnum = int(line[22:26])
+            except ValueError:
+                mutated_lines.append(line)
+                continue
+            if line_chain == chain_id and line_resnum == resnum:
+                # Replace residue name (columns 17-20)
+                new_line = line[:17] + new_resname.ljust(3) + line[20:]
+                mutated_lines.append(new_line)
+            else:
+                mutated_lines.append(line)
+        else:
+            mutated_lines.append(line)
+    return "\n".join(mutated_lines)
 
 
 # ----------------------
@@ -262,7 +286,53 @@ def main():
                     """)
                 else:
                     st.warning("Unable to generate Ramachandran plot. Please check the PDB input.")
+             with st.expander("🧬 Mutation Simulator (In Silico)"):
+                parser = PDBParser(QUIET=True)
+                structure = parser.get_structure("temp", StringIO(pdb_data))
+                residues = [
+                    (res.parent.id, res.id[1], res.get_resname())
+                    for res in structure.get_residues()
+                    if res.id[0] == ' '
+                ]
+                if residues:
+                    residue_options = [
+                        f"Chain {chain} Residue {resnum} ({resname})"
+                        for chain, resnum, resname in residues
+                    ]
+                    selected = st.selectbox("Select residue to mutate:", residue_options)
+                    selected_idx = residue_options.index(selected)
+                    sel_chain, sel_resnum, sel_resname = residues[selected_idx]
 
+                    aa_list = [
+                        "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY",
+                        "HIS", "ILE", "LEU", "LYS", "MET", "PHE", "PRO", "SER",
+                        "THR", "TRP", "TYR", "VAL"
+                    ]
+                    new_resname = st.selectbox("Mutate to:", aa_list, index=aa_list.index(sel_resname) if sel_resname in aa_list else 0)
+                    if st.button("Mutate and Analyze"):
+                        mutated_pdb = mutate_residue_in_pdb(pdb_data, sel_chain, sel_resnum, new_resname)
+                        st.success(f"Residue mutated: Chain {sel_chain} {sel_resname}{sel_resnum} → {new_resname}{sel_resnum}")
+
+                        st.subheader("Mutated Structure")
+                        show_3d_structure(mutated_pdb, style=controls['render_style'], highlight_ligands=controls['show_ligands'])
+
+                        st.subheader("Ramachandran Plot (Mutated)")
+                        phi_psi_mut = get_phi_psi_angles(mutated_pdb)
+                        if phi_psi_mut:
+                            fig_mut = plot_ramachandran(phi_psi_mut)
+                            st.pyplot(fig_mut)
+                            stats_mut = ramachandran_region_analysis(phi_psi_mut)
+                            st.markdown(f"""
+                            **Ramachandran Plot Analysis (Mutated)**
+                            - **Total residues:** {stats_mut['total']}
+                            - **Favored region:** {stats_mut['favored']:.1f}%
+                            - **Allowed region:** {stats_mut['allowed']:.1f}%
+                            - **Outlier region:** {stats_mut['outlier']:.1f}%
+                            """)
+                        else:
+                            st.warning("Unable to generate Ramachandran plot for mutated structure.")
+                else:
+                    st.info("No residues found for mutation.")
     with col2:
         st.header("Protein Dynamics")
         if pdb_data:
