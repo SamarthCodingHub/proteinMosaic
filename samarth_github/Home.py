@@ -104,7 +104,7 @@ def home_page():
 
     Dr. Kashyap’s mentorship has been instrumental in shaping this project. His guidance, expertise in bioinformatics, and thoughtful feedback brought clarity and depth, fostering both learning and innovation throughout
 
-    [Connect on LinkedIn](https://www.linkedin.com/in/kushagra-kashyap-9b1a8b1b5/)
+    [Connect on LinkedIn](https://www.linkedin.com/in/dr-kushagra-kashyap-b230a3bb/)
     """)
 
     # Feedback Link
