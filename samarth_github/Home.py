@@ -1,6 +1,7 @@
 import streamlit as st
 from streamlit_lottie import st_lottie
 import requests
+import random
 
 def load_lottieurl(url):
     r = requests.get(url)
@@ -26,7 +27,17 @@ def home_page():
         3. Explore interactive 3D visualization and analysis tools!
         4. Try the **Mutation Simulator** to mutate residues and see the effects instantly!
         """)
-
+    
+    with st.sidebar:
+    st_lottie(lottie_json, height=100, key="sidebar_lottie")
+    fun_facts = [
+        "Titin is the largest known protein with nearly 27,000 amino acids!",
+        "Hemoglobin carries oxygen in your blood.",
+        "Insulin was the first protein to be sequenced.",
+        "Some proteins can repair themselves after damage!"
+    ]
+    st.info("💡 " + random.choice(fun_facts))
+    
     # Fun Fact
     st.info("💡 Did you know? The largest known protein is Titin, which has nearly 27,000 amino acids!")
 
@@ -54,6 +65,15 @@ def home_page():
         - Sidebar controls
         """)
 
+     with st.sidebar:
+    st.markdown("### 🖼️ Protein Gallery")
+    if st.button("Load Hemoglobin (1A3N)"):
+        st.session_state['pdb_id'] = "1A3N"
+    if st.button("Load Insulin (4INS)"):
+        st.session_state['pdb_id'] = "4INS"
+    # Use st.session_state['pdb_id'] in your main input
+
+    
     # Educational Expander about PDB files
     st.markdown("---")
     with st.expander("ℹ️ What is a PDB file?"):
