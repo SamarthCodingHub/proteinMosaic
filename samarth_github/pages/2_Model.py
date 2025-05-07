@@ -49,15 +49,39 @@ def extract_ligands(pdb_data):
 def predict_active_sites(pdb_data):
     parser = PDBParser(QUIET=True)
     structure = parser.get_structure("temp", StringIO(pdb_data))
+    
+    # Define catalytic residues
     catalytic_residues = ['HIS', 'ASP', 'GLU', 'SER', 'CYS', 'LYS', 'TYR', 'ARG']
     active_sites = []
+    
+    # First get all ligand atoms
+    ligand_atoms = []
+    for residue in structure.get_residues():
+        if residue.id[0] != ' ':  # Non-standard residues (ligands)
+            ligand_atoms.extend(list(residue.get_atoms()))
+    
+    # Now check catalytic residues near ligands
     for residue in structure.get_residues():
         if residue.id[0] == ' ' and residue.get_resname() in catalytic_residues:
-            active_sites.append({
-                'resname': residue.get_resname(),
-                'chain': residue.parent.id,
-                'resnum': residue.id[1]
-            })
+            # Get all atoms of this residue
+            res_atoms = list(residue.get_atoms())
+            
+            # Check distance to any ligand atom
+            for res_atom in res_atoms:
+                for lig_atom in ligand_atoms:
+                    distance = res_atom - lig_atom
+                    if distance < 3.0:  # 3 Å cutoff
+                        active_sites.append({
+                            'resname': residue.get_resname(),
+                            'chain': residue.parent.id,
+                            'resnum': residue.id[1],
+                            'distance': f"{distance:.2f} Å"
+                        })
+                        break  # No need to check other atoms if one is within cutoff
+                else:
+                    continue  # Only executed if inner loop didn't break
+                break  # Break outer loop if inner loop broke
+    
     return active_sites
 
 def visualize_ligand_counts(ligands):
@@ -328,7 +352,14 @@ def main():
                             st.warning("Unable to generate Ramachandran plot for mutated structure.")
                 else:
                     st.info("No residues found for mutation.")
-
+   
+    with st.expander("Active Sites"):
+    active_sites = predict_active_sites(pdb_data)
+    st.write(f"**Predicted Active Sites Near Ligands ({len(active_sites)} residues):**")
+    for site in active_sites:
+        st.write(f"{site['resname']} Chain {site['chain']} Residue {site['resnum']} (Distance: {site['distance']})")
+    st.info("Active sites are predicted catalytic residues (HIS, ASP, GLU, SER, CYS, LYS, TYR, ARG) within 3 Å of any ligand.")
+    
     with col2:
         st.header("Protein Dynamics")
         if pdb_data:
