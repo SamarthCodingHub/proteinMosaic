@@ -45,8 +45,11 @@ def home_page():
     I created this app to make protein analysis accessible, interactive, and visually engaging for everyone!
 
     [![GitHub](https://img.shields.io/badge/GitHub-Profile-informational?style=flat&logo=github)](https://github.com/samarthskittad)
+
+    📧 [samarthkittad8088@gmail.com](mailto:samarthkittad8088@gmail.com)
     """)
 
+    
     # Optional: Add a nice footer
     st.markdown(
         "<hr style='border: 1px solid #A7FFEB;'>"
