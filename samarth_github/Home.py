@@ -1,6 +1,5 @@
-import streamlit as st
+import random
 from streamlit_lottie import st_lottie
-import requests
 
 def load_lottieurl(url):
     r = requests.get(url)
@@ -8,84 +7,101 @@ def load_lottieurl(url):
         return None
     return r.json()
 
-def home_page():
-    # Lottie Animation (science themed)
+def sidebar_controls():
+    # Lottie animation for sidebar (science themed)
     lottie_url = "https://assets10.lottiefiles.com/packages/lf20_3vbOcw.json"
     lottie_json = load_lottieurl(lottie_url)
-    st_lottie(lottie_json, height=200, key="science_animation")
 
-    # Title and Subtitle
-    st.markdown("<h1 style='text-align: center; color: #FF6F61;'>🧬 Protein Molecule Mosaic 🧬</h1>", unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align: center; color: #A7FFEB;'>Explore and analyze protein structures interactively!</h3>", unsafe_allow_html=True)
+    fun_facts = [
+        "Titin is the largest known protein with nearly 27,000 amino acids!",
+        "Hemoglobin carries oxygen in your blood.",
+        "Insulin was the first protein to be sequenced.",
+        "Some proteins can repair themselves after damage!",
+        "Collagen is the most abundant protein in mammals.",
+        "Green Fluorescent Protein (GFP) glows under UV light!"
+    ]
 
-    # Quick Start Guide
-    with st.expander("🚀 Quick Start Guide"):
-        st.markdown("""
-        1. Go to the **Model** page using the sidebar.
-        2. Upload your PDB file or enter a PDB ID.
-        3. Explore interactive 3D visualization and analysis tools!
-        4. Try the **Mutation Simulator** to mutate residues and see the effects instantly!
-        """)
+    with st.sidebar:
+        # Welcome animation and fun fact
+        if lottie_json:
+            st_lottie(lottie_json, height=80, key="sidebar_lottie")
+        st.title("Protein Molecule Mosaic")
+        st.info("💡 " + random.choice(fun_facts))
 
-    # Fun Fact
-    st.info("💡 Did you know? The largest known protein is Titin, which has nearly 27,000 amino acids!")
+        st.markdown("---")
 
-    # Objectives & Features in Columns
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("🎯 Objectives")
-        st.markdown("""
-        - **Accessible** protein structure visualization  
-        - **Upload** or fetch PDB files  
-        - **Classify** ligands & predict active sites  
-        - **Ramachandran plot** generation  
-        - **Simulate mutations** and analyze structural impact
-        """)
+        # Quick navigation
+        st.markdown("### 🚀 Quick Navigation")
+        st.button("Go to Home Page", on_click=lambda: st.experimental_rerun())
+        st.markdown("[What is a PDB file?](https://www.rcsb.org/)", unsafe_allow_html=True)
 
-    with col2:
-        st.subheader("✨ Features")
-        st.markdown("""
-        - 3D visualization (cartoon, surface, sphere)  
-        - Upload or fetch by PDB ID  
-        - Ligand classification  
-        - Active site prediction  
-        - Ramachandran plot analysis  
-        - **Mutation Simulator**: mutate any residue and instantly view effects  
-        - Sidebar controls
-        """)
+        st.markdown("---")
 
-    # Educational Expander about PDB files
-    st.markdown("---")
-    with st.expander("ℹ️ What is a PDB file?"):
-        st.write("""
-        A PDB file contains 3D structural data of proteins and other biological molecules.  
-        You can get sample files from the [RCSB PDB](https://www.rcsb.org/) website.
-        """)
+        # Theme/Color customizer
+        st.markdown("### 🎨 Theme Customizer")
+        color = st.color_picker("Pick 3D viewer background", "#ffffff")
 
-    # About Me Section with GitHub, Gmail, LinkedIn
-    st.markdown("---")
-    st.header("👨‍💻 About Me")
-    st.image("https://avatars.githubusercontent.com/u/203984900?v=4", width=120)
-    st.markdown("""
-    **Samarth Satalinga Kittad**  
-    Passionate developer & computer-aided drug discovery enthusiast.  
-    I created this app to make protein analysis accessible, interactive, and visually engaging for everyone!
+        st.markdown("---")
 
-    [![GitHub](https://img.shields.io/badge/GitHub-Profile-informational?style=flat&logo=github)](https://github.com/samarthskittad)  
-    📧 [samarthkittad8088@gmail.com](mailto:samarthkittad8088@gmail.com)  
-    [![LinkedIn](https://img.shields.io/badge/LinkedIn-blue?logo=linkedin)](https://www.linkedin.com/in/your-linkedin-profile)
-    """)
+        # Protein fun poll
+        st.markdown("### 🗳️ Protein Poll")
+        poll = st.radio("Which protein fascinates you most?", ["Hemoglobin", "Insulin", "Collagen", "Titin", "GFP"])
+        if st.button("Vote!"):
+            st.success(f"You voted for {poll}!")
 
-    # Feedback Link
-    st.markdown("💬 [Send Feedback](mailto:samarthkittad8088@gmail.com?subject=Protein%20Molecule%20Mosaic%20Feedback)")
+        st.markdown("---")
 
-    # Footer
-    st.markdown(
-        "<hr style='border: 1px solid #A7FFEB;'>"
-        "<p style='text-align: center; color: #A7FFEB;'>Made with ❤️ by Samarth Satalinga Kittad | 2025</p>",
-        unsafe_allow_html=True
-    )
+        # Mini protein gallery
+        st.markdown("### 🖼️ Protein Gallery")
+        gallery = {
+            "Hemoglobin (1A3N)": "1A3N",
+            "Insulin (4INS)": "4INS",
+            "Collagen (1CAG)": "1CAG",
+            "GFP (1EMA)": "1EMA"
+        }
+        for label, pid in gallery.items():
+            if st.button(f"Load {label}"):
+                st.session_state['pdb_id'] = pid
+                st.experimental_rerun()
 
-# Only run if this script is executed directly
-if __name__ == "__main__":
-    home_page()
+        st.markdown("---")
+
+        # Sidebar mutation simulator preview
+        st.markdown("### 🧬 Quick Mutation")
+        chain = st.text_input("Chain", "A", max_chars=1, key="sidebar_chain")
+        resnum = st.number_input("Residue #", min_value=1, max_value=10000, value=10, key="sidebar_resnum")
+        aa = st.selectbox("Mutate to", [
+            "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY",
+            "HIS", "ILE", "LEU", "LYS", "MET", "PHE", "PRO", "SER",
+            "THR", "TRP", "TYR", "VAL"
+        ], key="sidebar_aa")
+        if st.button("Simulate Mutation (Sidebar)"):
+            st.success(f"Would mutate Chain {chain} Residue {resnum} to {aa}")
+
+        st.markdown("---")
+
+        # Ligand and rendering controls (from your original)
+        st.markdown("**Ligand Display Options**")
+        show_ligands = st.checkbox("Highlight Ligands", True)
+        render_style = st.selectbox(
+            "Rendering Style:",
+            ["cartoon", "surface", "sphere"],
+            index=0,
+            help="Choose molecular representation style"
+        )
+
+        st.markdown("---")
+
+        # Feedback/contact
+        st.markdown("### 💬 Feedback")
+        st.markdown(
+            "[Send Feedback](mailto:samarthkittad8088@gmail.com?subject=Protein%20Molecule%20Mosaic%20Feedback)",
+            unsafe_allow_html=True
+        )
+
+        # Return controls for main app logic
+        return {
+            'render_style': render_style,
+            'show_ligands': show_ligands,
+            'color': color
+        }
