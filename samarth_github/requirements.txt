@@ -4,3 +4,4 @@ biopython
 matplotlib
 plotly
 requests
+streamlit-lottie
