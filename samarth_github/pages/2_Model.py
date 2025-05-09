@@ -2,11 +2,10 @@ import streamlit as st
 import requests
 from Bio.PDB import PDBParser, PPBuilder
 from io import StringIO
-import plotly.express as px
+import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import py3Dmol
-import matplotlib.pyplot as plt
-import biotite.structure.io as bsio
+import biotite.structure.io as bsio  # For pLDDT calculation
 
 # ----------------------
 # Helper Functions
@@ -115,15 +114,18 @@ def get_phi_psi_angles(pdb_string):
                         phi_psi.append((phi * 180.0 / 3.14159, psi * 180.0 / 3.14159))
     return phi_psi
 
-def plotly_ramachandran(phi_psi):
+def plot_ramachandran(phi_psi):
+    fig, ax = plt.subplots(figsize=(5, 5))
     if phi_psi:
         phi, psi = zip(*phi_psi)
-        fig = px.scatter(x=phi, y=psi, labels={'x': 'Phi', 'y': 'Psi'}, title="Ramachandran Plot")
-        fig.update_traces(marker=dict(size=6))
-        fig.update_layout(xaxis_range=[-180,180], yaxis_range=[-180,180])
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.warning("Unable to generate Ramachandran plot. Please check the PDB input.")
+        ax.scatter(phi, psi, s=10)
+        ax.set_xlabel("Phi")
+        ax.set_ylabel("Psi")
+        ax.set_title("Ramachandran Plot")
+        ax.set_xlim(-180, 180)
+        ax.set_ylim(-180, 180)
+        ax.grid(True)
+    return fig
 
 def ramachandran_region_analysis(phi_psi_list):
     favored = 0
@@ -148,11 +150,11 @@ def ramachandran_region_analysis(phi_psi_list):
         "total": total
     }
 
-def show_3d_structure(pdb_data, style='cartoon', color_scheme='spectrum', background='white', highlight_ligands=True):
+def show_3d_structure(pdb_data, style='cartoon', highlight_ligands=True):
     view = py3Dmol.view(width=800, height=500)
     view.addModel(pdb_data, 'pdb')
     if style == 'cartoon':
-        view.setStyle({'cartoon': {'color': color_scheme}})
+        view.setStyle({'cartoon': {'color': 'spectrum'}})
     elif style == 'surface':
         view.setStyle({'cartoon': {'color': 'white'}})
         view.addSurface(py3Dmol.SAS, {'opacity': 0.7})
@@ -161,7 +163,7 @@ def show_3d_structure(pdb_data, style='cartoon', color_scheme='spectrum', backgr
     if highlight_ligands:
         view.addStyle({'hetflag': True}, {'stick': {'colorscheme': 'greenCarbon', 'radius': 0.3}})
     view.zoomTo()
-    view.setBackgroundColor(background)
+    view.setBackgroundColor('white')
     st.components.v1.html(view._make_html(), height=500, width=800)
 
 def mutate_residue_in_pdb(pdb_data, chain_id, resnum, new_resname):
@@ -205,7 +207,7 @@ def sidebar_controls():
         )
         st.markdown("---")
         st.markdown("**Ligand Display Options**")
-        show_ligands = st.checkbox("Highlight Ligands", True)
+        show_ligands = st.checkbox("Highlight Ligands", True, key="sidebar_ligand_checkbox")
         return {
             'analysis_type': analysis_type,
             'render_style': render_style,
@@ -230,40 +232,37 @@ def main():
         st.header("Protein Palette")
         st.markdown("**Load a protein structure:**")
 
-        # Professional Progress Bar
-        steps = ["Input", "Loaded", "Analysis", "Visualization"]
-        progress = 1
-        pdb_data = None
-        plddt = None
-
         input_mode = st.radio(
             "Choose input mode:",
-            ["Upload PDB", "Fetch by PDB ID", "Predict from Sequence (ESMFold)"],
-            help="Select how you want to provide the protein structure."
+            ["Upload PDB", "Fetch by PDB ID", "Predict from Sequence (ESMFold)"]
         )
 
+        pdb_data = None
+        source = None
+        plddt = None
+
         if input_mode == "Upload PDB":
-            uploaded_pdb = st.file_uploader("Upload a PDB file", type=["pdb"], help="Upload your own PDB file for analysis.")
+            uploaded_pdb = st.file_uploader("Upload a PDB file", type=["pdb"])
             if uploaded_pdb is not None:
                 pdb_data = uploaded_pdb.read().decode("utf-8")
-                progress = 2
+                source = "upload"
                 st.success("PDB file uploaded and loaded.")
         elif input_mode == "Fetch by PDB ID":
-            pdb_id = st.text_input("Enter PDB ID:", help="e.g. 1A3N or 1EMA")
+            pdb_id = st.text_input("Enter PDB ID:").upper()
             if pdb_id:
-                with st.spinner("Fetching PDB from RCSB..."):
-                    pdb_data = fetch_pdb_data(pdb_id)
+                pdb_data = fetch_pdb_data(pdb_id)
+                source = "pdbid"
                 if pdb_data:
-                    progress = 2
                     st.success(f"PDB ID {pdb_id} loaded from RCSB.")
+
         elif input_mode == "Predict from Sequence (ESMFold)":
             example_seq = "MGSSHHHHHHSSGLVPRGSHMRGPNPTAASLEASAGPFTVRSFTVSRPSGYGAGTVYYPTNAGGTVGAIAIVPGYTARQSSIKWWGPRLASHGFVVITIDTNSTLDQPSSRSSQQMAALRQVASLNGTSSSPIYGKVDTARMGVMGWSMGGGGSLISAANNPSLKAAAPQAPWDSSTNFSSVTVPTLIFACENDSIAPVNSSALPIYDSMSRNAKQFLEINGGSHSCANSGNSNQALIGKKGVAWMKRFMDNDTRYSTFACENPNSTRVSDFRTANCSLEDPAANKARKEAELAAATAEQ"
-            sequence = st.text_area("Paste your protein sequence (1-letter code):", value=example_seq, height=200, help="Paste or type your sequence here.")
+            sequence = st.text_area("Paste your protein sequence (1-letter code):", value=example_seq, height=200)
             if st.button("Predict Structure with ESMFold"):
                 with st.spinner("Predicting structure..."):
                     pdb_data, plddt = esmfold_predict_structure(sequence)
+                    source = "esmfold"
                 if pdb_data:
-                    progress = 2
                     st.success("Structure predicted with ESMFold!")
                     st.info(f"Average pLDDT: {plddt}")
                     st.download_button(
@@ -275,29 +274,21 @@ def main():
                 else:
                     st.error("Prediction failed.")
 
-        st.progress(progress / len(steps))
-
-        # ---- Professional 3D Viewer Controls ----
         if pdb_data:
             st.subheader("3D Structure Viewer")
-            with st.expander("3D Viewer Controls", expanded=False):
-                style = st.selectbox("Style", ["cartoon", "surface", "sphere"], index=["cartoon", "surface", "sphere"].index(controls['render_style']))
-                color_scheme = st.selectbox("Color Scheme", ["spectrum", "chain", "element", "white"], index=0)
-                background = st.color_picker("Background Color", "#181A1B")
-                highlight_ligands = st.checkbox("Highlight Ligands", value=controls['show_ligands'])
+            # Use a unique key for this checkbox in the main area
+            highlight_ligands = st.checkbox("Highlight Ligands", value=controls['show_ligands'], key="main_ligand_checkbox")
             show_3d_structure(
                 pdb_data,
-                style=style,
-                color_scheme=color_scheme,
-                background=background,
+                style=controls['render_style'],
                 highlight_ligands=highlight_ligands
             )
 
-            # ---- Interactive Ramachandran Plot ----
-            with st.expander("Ramachandran Plot ℹ️", expanded=False):
+            with st.expander("Ramachandran Plot"):
                 phi_psi = get_phi_psi_angles(pdb_data)
-                plotly_ramachandran(phi_psi)
                 if phi_psi:
+                    fig = plot_ramachandran(phi_psi)
+                    st.pyplot(fig)
                     stats = ramachandran_region_analysis(phi_psi)
                     st.markdown(f"""
                     **Ramachandran Plot Analysis**
@@ -310,7 +301,7 @@ def main():
                     st.warning("Unable to generate Ramachandran plot. Please check the PDB input.")
 
             # --- Mutation Simulator ---
-            with st.expander("🧬 Mutation Simulator (In Silico)", expanded=False):
+            with st.expander("🧬 Mutation Simulator (In Silico)"):
                 parser = PDBParser(QUIET=True)
                 structure = parser.get_structure("temp", StringIO(pdb_data))
                 residues = [
@@ -318,6 +309,7 @@ def main():
                     for res in structure.get_residues()
                     if res.id[0] == ' '
                 ]
+
                 if residues:
                     residue_options = [
                         f"Chain {chain} Residue {resnum} ({resname})"
@@ -336,11 +328,12 @@ def main():
                         mutated_pdb = mutate_residue_in_pdb(pdb_data, sel_chain, sel_resnum, new_resname)
                         st.success(f"Residue mutated: Chain {sel_chain} {sel_resname}{sel_resnum} → {new_resname}{sel_resnum}")
                         st.subheader("Mutated Structure")
-                        show_3d_structure(mutated_pdb, style=style, color_scheme=color_scheme, background=background, highlight_ligands=highlight_ligands)
+                        show_3d_structure(mutated_pdb, style=controls['render_style'], highlight_ligands=highlight_ligands)
                         st.subheader("Ramachandran Plot (Mutated)")
                         phi_psi_mut = get_phi_psi_angles(mutated_pdb)
-                        plotly_ramachandran(phi_psi_mut)
                         if phi_psi_mut:
+                            fig_mut = plot_ramachandran(phi_psi_mut)
+                            st.pyplot(fig_mut)
                             stats_mut = ramachandran_region_analysis(phi_psi_mut)
                             st.markdown(f"""
                             **Ramachandran Plot Analysis (Mutated)**
@@ -359,21 +352,24 @@ def main():
         if pdb_data:
             if plddt is not None:
                 st.info(f"ESMFold average pLDDT: {plddt}")
+
             with st.expander("Ligand Information"):
                 ligands = extract_ligands(pdb_data)
                 st.write(f"**Ions:** {len(ligands['ion'])}")
                 st.write(f"**Ion Names:** {', '.join(ligands['ion'])}")
                 st.write(f"**Monodentate Ligands:** {len(ligands['monodentate'])}")
                 st.write(f"**Polydentate Ligands:** {len(ligands['polydentate'])}")
+
             with st.expander("Active Sites"):
                 active_sites = predict_active_sites(pdb_data)
                 st.write(f"**Predicted Active Sites ({len(active_sites)} residues):**")
                 for site in active_sites:
                     st.write(f"{site['resname']} Chain {site['chain']} Residue {site['resnum']}")
                 st.info("Active sites are predicted based on common catalytic residues (HIS, ASP, GLU, SER, CYS, LYS, TYR, ARG).")
+
             with st.expander("Ligand Type Visualization"):
                 fig = visualize_ligand_counts(ligands)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig)
 
 if __name__ == "__main__":
     main()
