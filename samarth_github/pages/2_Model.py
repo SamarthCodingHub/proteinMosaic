@@ -5,6 +5,7 @@ from io import StringIO
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import py3Dmol
+import biotite.structure.io as bsio  # For pLDDT calculation
 
 # ----------------------
 # Helper Functions
@@ -26,9 +27,14 @@ def esmfold_predict_structure(sequence):
     response = requests.post('https://api.esmatlas.com/foldSequence/v1/pdb/', headers=headers, data=sequence)
     if response.status_code != 200:
         st.error("ESMFold API error: " + response.text)
-        return None
+        return None, None
     pdb_string = response.content.decode('utf-8')
-    return pdb_string
+    # Calculate pLDDT from B-factor (biotite)
+    with open('predicted_tmp.pdb', 'w') as f:
+        f.write(pdb_string)
+    struct = bsio.load_structure('predicted_tmp.pdb', extra_fields=["b_factor"])
+    b_value = round(struct.b_factor.mean(), 4)
+    return pdb_string, b_value
 
 def classify_ligand(residue):
     resname = residue.get_resname().strip()
@@ -210,37 +216,6 @@ def sidebar_controls():
         }
 
 # ----------------------
-# HOME PAGE
-# ----------------------
-
-def home_page():
-    st.title("HOME PAGE")
-    st.header("Overview of the App")
-    st.markdown("""
-    **Protein Molecule Mosaic** is an interactive web application for exploring and analyzing protein structures (PDB files).
-
-    ### Objectives:
-    - Make protein structure visualization accessible and interactive
-    - Allow users to upload or fetch PDB files for analysis
-    - Identify and classify ligands and predict active sites
-    - Generate and analyze Ramachandran plots
-
-    ### Features:
-    - 3D visualization of protein structures (cartoon, surface, sphere)
-    - Upload PDB files or fetch by PDB ID
-    - Ligand classification (ion, monodentate, polydentate)
-    - Active site prediction based on catalytic residues
-    - Ramachandran plot generation with region analysis
-    - User-friendly sidebar controls
-    """)
-    st.header("About Me")
-    st.markdown("""
-    **Samarth Satalinga Kittad**
-    A passionate developer and computer aided drug discovery enthusiast.
-    I created this app to make protein analysis accessible, interactive, and visually engaging for students, researchers, and anyone curious about structural biology!
-    """)
-
-# ----------------------
 # Main App Logic
 # ----------------------
 
@@ -258,7 +233,6 @@ def main():
         st.header("Protein Palette")
         st.markdown("**Load a protein structure:**")
 
-        # --- Input Mode Selection ---
         input_mode = st.radio(
             "Choose input mode:",
             ["Upload PDB", "Fetch by PDB ID", "Predict from Sequence (ESMFold)"]
@@ -266,6 +240,7 @@ def main():
 
         pdb_data = None
         source = None
+        plddt = None
 
         if input_mode == "Upload PDB":
             uploaded_pdb = st.file_uploader("Upload a PDB file", type=["pdb"])
@@ -287,10 +262,11 @@ def main():
             sequence = st.text_area("Paste your protein sequence (1-letter code):", value=example_seq, height=200)
             if st.button("Predict Structure with ESMFold"):
                 with st.spinner("Predicting structure..."):
-                    pdb_data = esmfold_predict_structure(sequence)
+                    pdb_data, plddt = esmfold_predict_structure(sequence)
                     source = "esmfold"
                 if pdb_data:
                     st.success("Structure predicted with ESMFold!")
+                    st.info(f"Average pLDDT: {plddt}")
                     st.download_button(
                         label="Download Predicted PDB",
                         data=pdb_data,
@@ -372,9 +348,25 @@ def main():
                 else:
                     st.info("No residues found for mutation.")
 
+            # --- Custom Section Below Mutation Simulator ---
+            with st.expander("🔬 Custom Analysis Section"):
+                st.write("You can add any custom analysis, plots, or information here.")
+                parser = PDBParser(QUIET=True)
+                structure = parser.get_structure("temp", StringIO(pdb_data))
+                sequence = ""
+                for model in structure:
+                    for chain in model:
+                        for residue in chain:
+                            if residue.id[0] == " ":
+                                sequence += residue.resname + "-"
+                st.markdown(f"**Sequence (3-letter code):** {sequence}")
+
     with col2:
         st.header("Protein Dynamics")
         if pdb_data:
+            if plddt is not None:
+                st.info(f"ESMFold average pLDDT: {plddt}")
+
             with st.expander("Ligand Information"):
                 ligands = extract_ligands(pdb_data)
                 st.write(f"**Ions:** {len(ligands['ion'])}")
