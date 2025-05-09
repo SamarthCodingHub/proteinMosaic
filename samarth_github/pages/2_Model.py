@@ -20,6 +20,16 @@ def fetch_pdb_data(pdb_id):
         st.error(f"Error fetching PDB data: {str(e)}")
         return None
 
+def predict_structure_with_esmfold(sequence):
+    url = "https://api.esmatlas.com/foldSequence/v1/pdb/"
+    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+    response = requests.post(url, headers=headers, data=sequence)
+    if response.status_code == 200:
+        return response.text
+    else:
+        st.error(f"ESMFold prediction failed: {response.text}")
+        return None
+
 def classify_ligand(residue):
     resname = residue.get_resname().strip()
     if len(resname) <= 2:
@@ -49,39 +59,29 @@ def extract_ligands(pdb_data):
 def predict_active_sites(pdb_data):
     parser = PDBParser(QUIET=True)
     structure = parser.get_structure("temp", StringIO(pdb_data))
-    
-    # Define catalytic residues
     catalytic_residues = ['HIS', 'ASP', 'GLU', 'SER', 'CYS', 'LYS', 'TYR', 'ARG']
     active_sites = []
-    
-    # First get all ligand atoms
     ligand_atoms = []
     for residue in structure.get_residues():
-        if residue.id[0] != ' ':  # Non-standard residues (ligands)
+        if residue.id[0] != ' ':
             ligand_atoms.extend(list(residue.get_atoms()))
-    
-    # Now check catalytic residues near ligands
     for residue in structure.get_residues():
         if residue.id[0] == ' ' and residue.get_resname() in catalytic_residues:
-            # Get all atoms of this residue
             res_atoms = list(residue.get_atoms())
-            
-            # Check distance to any ligand atom
             for res_atom in res_atoms:
                 for lig_atom in ligand_atoms:
                     distance = res_atom - lig_atom
-                    if distance < 3.0:  # 3 Å cutoff
+                    if distance < 3.0:
                         active_sites.append({
                             'resname': residue.get_resname(),
                             'chain': residue.parent.id,
                             'resnum': residue.id[1],
                             'distance': f"{distance:.2f} Å"
                         })
-                        break  # No need to check other atoms if one is within cutoff
+                        break
                 else:
-                    continue  # Only executed if inner loop didn't break
-                break  # Break outer loop if inner loop broke
-    
+                    continue
+                break
     return active_sites
 
 def visualize_ligand_counts(ligands):
@@ -129,13 +129,10 @@ def ramachandran_region_analysis(phi_psi_list):
     total = len(phi_psi_list)
 
     for phi, psi in phi_psi_list:
-        # Favored: α-helix region
         if -160 <= phi <= -40 and -80 <= psi <= -20:
             favored += 1
-        # Favored: β-sheet region
         elif -180 <= phi <= -40 and 90 <= psi <= 180:
             favored += 1
-        # Allowed (a generous margin)
         elif (-180 <= phi <= -20 and -180 <= psi <= 180):
             allowed += 1
         else:
@@ -167,12 +164,7 @@ def show_3d_structure(pdb_data, style='cartoon', highlight_ligands=True):
     view.setBackgroundColor('white')
     st.components.v1.html(view._make_html(), height=500, width=800)
 
-# ---- Mutation Simulator Helper ----
 def mutate_residue_in_pdb(pdb_data, chain_id, resnum, new_resname):
-    """
-    Naively change the residue name in the PDB file for a given chain and residue number.
-    Only for educational/demo purposes!
-    """
     lines = pdb_data.splitlines()
     mutated_lines = []
     for line in lines:
@@ -184,7 +176,6 @@ def mutate_residue_in_pdb(pdb_data, chain_id, resnum, new_resname):
                 mutated_lines.append(line)
                 continue
             if line_chain == chain_id and line_resnum == resnum:
-                # Replace residue name (columns 17-20)
                 new_line = line[:17] + new_resname.ljust(3) + line[20:]
                 mutated_lines.append(new_line)
             else:
@@ -193,6 +184,15 @@ def mutate_residue_in_pdb(pdb_data, chain_id, resnum, new_resname):
             mutated_lines.append(line)
     return "\n".join(mutated_lines)
 
+def get_plddt_from_pdb(pdb_string):
+    parser = PDBParser(QUIET=True)
+    structure = parser.get_structure("pred", StringIO(pdb_string))
+    b_factors = [atom.get_bfactor() for atom in structure.get_atoms()]
+    if b_factors:
+        return sum(b_factors)/len(b_factors)
+    else:
+        return None
+
 # ----------------------
 # UI Components
 # ----------------------
@@ -200,10 +200,10 @@ def sidebar_controls():
     with st.sidebar:
         st.image("https://media.istockphoto.com/id/1390037416/photo/chain-of-amino-acid-or-bio-molecules-called-protein-3d-illustration.jpg?s=612x612&w=0&k=20&c=xSkGolb7TDjqibvINrQYJ_rqrh4RIIzKIj3iMj4bZqI=", width=400)
         st.title("Protein Molecule Mosaic")
-        analysis_type = st.radio(
-            "Analysis Mode:",
-            ["Single Structure"],
-            help="Analyze single structure"
+        input_mode = st.radio(
+            "Input Mode:",
+            ["PDB ID", "Upload PDB", "Predict from Sequence (ESMFold)"],
+            help="Choose how to provide a protein structure"
         )
         render_style = st.selectbox(
             "Rendering Style:",
@@ -215,42 +215,10 @@ def sidebar_controls():
         st.markdown("**Ligand Display Options**")
         show_ligands = st.checkbox("Highlight Ligands", True)
         return {
-            'analysis_type': analysis_type,
+            'input_mode': input_mode,
             'render_style': render_style,
             'show_ligands': show_ligands,
         }
-
-# ----------------------
-# HOME PAGE
-# ----------------------
-def home_page():
-    st.title("HOME PAGE")
-    st.header("Overview of the App")
-    st.markdown("""
-    **Protein Molecule Mosaic** is an interactive web application for exploring and analyzing protein structures (PDB files).
-
-    ### Objectives:
-    - Make protein structure visualization accessible and interactive
-    - Allow users to upload or fetch PDB files for analysis
-    - Identify and classify ligands and predict active sites
-    - Generate and analyze Ramachandran plots
-
-    ### Features:
-    - 3D visualization of protein structures (cartoon, surface, sphere)
-    - Upload PDB files or fetch by PDB ID
-    - Ligand classification (ion, monodentate, polydentate)
-    - Active site prediction based on catalytic residues
-    - Ramachandran plot generation with region analysis
-    - User-friendly sidebar controls
-    """)
-
-    st.header("About Me")
-    st.markdown("""
-    **Samarth Satalinga Kittad**
-
-    A passionate developer and computer aided drug discovery enthusiast.  
-    I created this app to make protein analysis accessible, interactive, and visually engaging for students, researchers, and anyone curious about structural biology!
-    """)
 
 # ----------------------
 # Main App Logic
@@ -267,20 +235,34 @@ def main():
     with col1:
         st.header("Protein Palette")
         st.markdown("**Load a protein structure:**")
-        pdb_id = st.text_input("Enter PDB ID (optional):").upper()
-        uploaded_pdb = st.file_uploader("Or upload a PDB file", type=["pdb"])
         pdb_data = None
         source = None
-        if uploaded_pdb is not None:
-            pdb_data = uploaded_pdb.read().decode("utf-8")
-            source = "upload"
-            st.success("PDB file uploaded and loaded.")
-        elif pdb_id:
-            pdb_data = fetch_pdb_data(pdb_id)
-            source = "pdbid"
-            if pdb_data:
-                st.success(f"PDB ID {pdb_id} loaded from RCSB.")
 
+        # --- NEW: Handle input modes ---
+        if controls['input_mode'] == "PDB ID":
+            pdb_id = st.text_input("Enter PDB ID (optional):").upper()
+            if pdb_id:
+                pdb_data = fetch_pdb_data(pdb_id)
+                source = "pdbid"
+                if pdb_data:
+                    st.success(f"PDB ID {pdb_id} loaded from RCSB.")
+        elif controls['input_mode'] == "Upload PDB":
+            uploaded_pdb = st.file_uploader("Upload a PDB file", type=["pdb"])
+            if uploaded_pdb is not None:
+                pdb_data = uploaded_pdb.read().decode("utf-8")
+                source = "upload"
+                st.success("PDB file uploaded and loaded.")
+        elif controls['input_mode'] == "Predict from Sequence (ESMFold)":
+            example_seq = "MGSSHHHHHHSSGLVPRGSHMRGPNPTAASLEASAGPFTVRSFTVSRPSGYGAGTVYYPTNAGGTVGAIAIVPGYTARQSSIKWWGPRLASHGFVVITIDTNSTLDQPSSRSSQQMAALRQVASLNGTSSSPIYGKVDTARMGVMGWSMGGGGSLISAANNPSLKAAAPQAPWDSSTNFSSVTVPTLIFACENDSIAPVNSSALPIYDSMSRNAKQFLEINGGSHSCANSGNSNQALIGKKGVAWMKRFMDNDTRYSTFACENPNSTRVSDFRTANCSLEDPAANKARKEAELAAATAEQ"
+            seq = st.text_area("Input protein sequence (single-letter, no spaces):", value=example_seq, height=150)
+            if st.button("Predict Structure with ESMFold"):
+                with st.spinner("Predicting structure..."):
+                    pdb_data = predict_structure_with_esmfold(seq)
+                    source = "esmfold"
+                    if pdb_data:
+                        st.success("Structure predicted with ESMFold.")
+
+        # --- Continue as before ---
         if pdb_data:
             st.subheader("3D Structure Viewer")
             show_3d_structure(
@@ -288,6 +270,11 @@ def main():
                 style=controls['render_style'],
                 highlight_ligands=controls['show_ligands']
             )
+            if source == "esmfold":
+                plddt = get_plddt_from_pdb(pdb_data)
+                if plddt:
+                    st.info(f"ESMFold average pLDDT confidence: {plddt:.2f}")
+
             with st.expander("Ramachandran Plot"):
                 phi_psi = get_phi_psi_angles(pdb_data)
                 if phi_psi:
@@ -352,9 +339,7 @@ def main():
                             st.warning("Unable to generate Ramachandran plot for mutated structure.")
                 else:
                     st.info("No residues found for mutation.")
-   
-    
-    
+
     with col2:
         st.header("Protein Dynamics")
         if pdb_data:
@@ -376,4 +361,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
