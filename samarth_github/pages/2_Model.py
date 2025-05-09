@@ -348,19 +348,6 @@ def main():
                 else:
                     st.info("No residues found for mutation.")
 
-            # --- Custom Section Below Mutation Simulator ---
-            with st.expander("🔬 Custom Analysis Section"):
-                st.write("You can add any custom analysis, plots, or information here.")
-                parser = PDBParser(QUIET=True)
-                structure = parser.get_structure("temp", StringIO(pdb_data))
-                sequence = ""
-                for model in structure:
-                    for chain in model:
-                        for residue in chain:
-                            if residue.id[0] == " ":
-                                sequence += residue.resname + "-"
-                st.markdown(f"**Sequence (3-letter code):** {sequence}")
-
     with col2:
         st.header("Protein Dynamics")
         if pdb_data:
