@@ -5,7 +5,7 @@ from io import StringIO
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import py3Dmol
-import biotite.structure.io as bsio  # For pLDDT calculation
+import biotite.structure.io as bsio
 
 # ----------------------
 # Helper Functions
@@ -248,7 +248,6 @@ def main():
                 pdb_data = uploaded_pdb.read().decode("utf-8")
                 source = "upload"
                 st.success("PDB file uploaded and loaded.")
-
         elif input_mode == "Fetch by PDB ID":
             pdb_id = st.text_input("Enter PDB ID:").upper()
             if pdb_id:
@@ -324,7 +323,6 @@ def main():
                         "THR", "TRP", "TYR", "VAL"
                     ]
                     new_resname = st.selectbox("Mutate to:", aa_list, index=aa_list.index(sel_resname) if sel_resname in aa_list else 0)
-
                     if st.button("Mutate and Analyze"):
                         mutated_pdb = mutate_residue_in_pdb(pdb_data, sel_chain, sel_resnum, new_resname)
                         st.success(f"Residue mutated: Chain {sel_chain} {sel_resname}{sel_resnum} → {new_resname}{sel_resnum}")
