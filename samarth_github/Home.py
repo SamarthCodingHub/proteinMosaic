@@ -43,13 +43,14 @@ def home_page():
         5. Or predict protein structures directly from sequences using **ESMFold**.
         """)
 
-    # Objectives & Features in two columns
+    # Objectives & Features in two columns with ESMFold highlighted
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("🎯 Objectives")
         st.markdown("""
         - **Accessible** protein structure visualization  
         - **Upload** or fetch PDB files  
+        - **Predict 3D structures from amino acid sequences using ESMFold**  
         - **Classify** ligands & predict active sites  
         - **Ramachandran plot** generation  
         - **Simulate mutations** and analyze structural impact
@@ -59,6 +60,7 @@ def home_page():
         st.markdown("""
         - 3D visualization (cartoon, surface, sphere)  
         - Upload or fetch by PDB ID  
+        - **Predict protein structures from sequences with ESMFold**  
         - Ligand classification  
         - Active site prediction  
         - Ramachandran plot analysis  
