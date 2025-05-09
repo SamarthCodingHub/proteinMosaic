@@ -30,7 +30,6 @@ PROTEIN_OF_DAY = [
     ("Ferritin", "2FHA")
 ]
 
-# --- Helper Functions (as in your code, unchanged) ---
 @st.cache_data
 def fetch_pdb_data(pdb_id):
     url = f"https://files.rcsb.org/download/{pdb_id}.pdb"
@@ -251,7 +250,6 @@ def sidebar_controls():
             'show_ligands': show_ligands,
         }
 
-# --- Main App Logic ---
 def main():
     st.set_page_config(
         page_title="Protein Molecule Mosaic",
@@ -263,7 +261,6 @@ def main():
     st.markdown("## Protein Molecule Mosaic")
     st.markdown("> Welcome! Explore protein structure, dynamics, and mutations interactively. :microscope:")
 
-    # --- Step Progress Indicator ---
     steps = ["Choose Input", "Load Structure", "Analyze", "Visualize"]
     step = 1
     if 'pdb_data' in st.session_state:
@@ -279,140 +276,133 @@ def main():
         st.header("Protein Palette")
         st.markdown("**Load a protein structure:**")
 
-        # --- Tabs for input and results ---
-        tab_input, tab_results = st.tabs(["Input & Prediction", "Results & Analysis"])
+        input_mode = st.radio(
+            "Choose input mode:",
+            ["Upload PDB", "Fetch by PDB ID", "Predict from Sequence (ESMFold)"],
+            key="input_mode",
+            help="Select how you want to provide the protein structure."
+        )
 
-        with tab_input:
-            input_mode = st.radio(
-                "Choose input mode:",
-                ["Upload PDB", "Fetch by PDB ID", "Predict from Sequence (ESMFold)"],
-                key="input_mode",
-                help="Select how you want to provide the protein structure."
+        pdb_data = None
+        plddt = None
+
+        if input_mode == "Upload PDB":
+            uploaded_pdb = st.file_uploader("Upload a PDB file", type=["pdb"], help="Upload your own PDB file for analysis.")
+            if uploaded_pdb is not None:
+                pdb_data = uploaded_pdb.read().decode("utf-8")
+                st.session_state['pdb_data'] = pdb_data
+                st.session_state['protein_name'] = uploaded_pdb.name
+                st.success(f"PDB file **{uploaded_pdb.name}** uploaded and loaded.")
+                st.balloons()
+                st.write(f"**Filename:** {uploaded_pdb.name}")
+        elif input_mode == "Fetch by PDB ID":
+            pdb_id = st.text_input("Enter PDB ID:", value=st.session_state.get('pdbid', ''), help="e.g. 1A3N or 1EMA")
+            if pdb_id:
+                with st.spinner("Fetching PDB from RCSB..."):
+                    pdb_data = fetch_pdb_data(pdb_id)
+                if pdb_data:
+                    st.session_state['pdb_data'] = pdb_data
+                    st.session_state['protein_name'] = pdb_id
+                    st.success(f"PDB ID **{pdb_id}** loaded from RCSB.")
+                    st.snow()
+        elif input_mode == "Predict from Sequence (ESMFold)":
+            example_seq = "MGSSHHHHHHSSGLVPRGSHMRGPNPTAASLEASAGPFTVRSFTVSRPSGYGAGTVYYPTNAGGTVGAIAIVPGYTARQSSIKWWGPRLASHGFVVITIDTNSTLDQPSSRSSQQMAALRQVASLNGTSSSPIYGKVDTARMGVMGWSMGGGGSLISAANNPSLKAAAPQAPWDSSTNFSSVTVPTLIFACENDSIAPVNSSALPIYDSMSRNAKQFLEINGGSHSCANSGNSNQALIGKKGVAWMKRFMDNDTRYSTFACENPNSTRVSDFRTANCSLEDPAANKARKEAELAAATAEQ"
+            sequence = st.text_area("Paste your protein sequence (1-letter code):", value=example_seq, height=200, help="Paste or type your sequence here.")
+            if st.button("Predict Structure with ESMFold"):
+                with st.spinner("Predicting structure..."):
+                    pdb_data, plddt = esmfold_predict_structure(sequence)
+                if pdb_data:
+                    st.session_state['pdb_data'] = pdb_data
+                    st.session_state['protein_name'] = "ESMFold Prediction"
+                    st.session_state['plddt'] = plddt
+                    st.success("Structure predicted with ESMFold!")
+                    st.info(f"Average pLDDT: {plddt}")
+                    st.download_button(
+                        label="Download Predicted PDB",
+                        data=pdb_data,
+                        file_name='esmfold_predicted.pdb',
+                        mime='text/plain',
+                    )
+                    st.balloons()
+                else:
+                    st.error("Prediction failed.")
+
+        # --- Show results right below input ---
+        pdb_data = st.session_state.get('pdb_data', None)
+        plddt = st.session_state.get('plddt', None)
+        protein_name = st.session_state.get('protein_name', 'Protein')
+        if pdb_data:
+            st.subheader(f"3D Structure Viewer: {protein_name}")
+            with st.expander("3D Viewer Controls", expanded=False):
+                style = st.selectbox("Style", ["cartoon", "surface", "sphere"], index=["cartoon", "surface", "sphere"].index(controls['render_style']))
+                color = st.selectbox("Color Scheme", ["spectrum", "chain", "element", "white"], index=["spectrum", "chain", "element", "white"].index(controls['color_scheme']))
+            show_3d_structure(
+                pdb_data,
+                style=style,
+                color_scheme=color,
+                highlight_ligands=controls['show_ligands']
             )
 
-            pdb_data = None
-            source = None
-            plddt = None
+            with st.expander("Ramachandran Plot"):
+                phi_psi = get_phi_psi_angles(pdb_data)
+                if phi_psi:
+                    fig = plot_ramachandran(phi_psi)
+                    st.pyplot(fig)
+                    stats = ramachandran_region_analysis(phi_psi)
+                    st.markdown(f"""
+                    **Ramachandran Plot Analysis**
+                    - **Total residues:** {stats['total']}
+                    - **Favored region:** {stats['favored']:.1f}%
+                    - **Allowed region:** {stats['allowed']:.1f}%
+                    - **Outlier region:** {stats['outlier']:.1f}%
+                    """)
+                else:
+                    st.warning("Unable to generate Ramachandran plot. Please check the PDB input.")
 
-            if input_mode == "Upload PDB":
-                uploaded_pdb = st.file_uploader("Upload a PDB file", type=["pdb"], help="Upload your own PDB file for analysis.")
-                if uploaded_pdb is not None:
-                    pdb_data = uploaded_pdb.read().decode("utf-8")
-                    st.session_state['pdb_data'] = pdb_data
-                    st.session_state['protein_name'] = uploaded_pdb.name
-                    st.success(f"PDB file **{uploaded_pdb.name}** uploaded and loaded.")
-                    st.balloons()
-                    st.write(f"**Filename:** {uploaded_pdb.name}")
-            elif input_mode == "Fetch by PDB ID":
-                pdb_id = st.text_input("Enter PDB ID:", value=st.session_state.get('pdbid', ''), help="e.g. 1A3N or 1EMA")
-                if pdb_id:
-                    with st.spinner("Fetching PDB from RCSB..."):
-                        pdb_data = fetch_pdb_data(pdb_id)
-                    if pdb_data:
-                        st.session_state['pdb_data'] = pdb_data
-                        st.session_state['protein_name'] = pdb_id
-                        st.success(f"PDB ID **{pdb_id}** loaded from RCSB.")
-                        st.snow()
-            elif input_mode == "Predict from Sequence (ESMFold)":
-                example_seq = "MGSSHHHHHHSSGLVPRGSHMRGPNPTAASLEASAGPFTVRSFTVSRPSGYGAGTVYYPTNAGGTVGAIAIVPGYTARQSSIKWWGPRLASHGFVVITIDTNSTLDQPSSRSSQQMAALRQVASLNGTSSSPIYGKVDTARMGVMGWSMGGGGSLISAANNPSLKAAAPQAPWDSSTNFSSVTVPTLIFACENDSIAPVNSSALPIYDSMSRNAKQFLEINGGSHSCANSGNSNQALIGKKGVAWMKRFMDNDTRYSTFACENPNSTRVSDFRTANCSLEDPAANKARKEAELAAATAEQ"
-                sequence = st.text_area("Paste your protein sequence (1-letter code):", value=example_seq, height=200, help="Paste or type your sequence here.")
-                if st.button("Predict Structure with ESMFold"):
-                    with st.spinner("Predicting structure..."):
-                        pdb_data, plddt = esmfold_predict_structure(sequence)
-                    if pdb_data:
-                        st.session_state['pdb_data'] = pdb_data
-                        st.session_state['protein_name'] = "ESMFold Prediction"
-                        st.session_state['plddt'] = plddt
-                        st.success("Structure predicted with ESMFold!")
-                        st.info(f"Average pLDDT: {plddt}")
-                        st.download_button(
-                            label="Download Predicted PDB",
-                            data=pdb_data,
-                            file_name='esmfold_predicted.pdb',
-                            mime='text/plain',
-                        )
-                        st.balloons()
-                    else:
-                        st.error("Prediction failed.")
-
-        with tab_results:
-            pdb_data = st.session_state.get('pdb_data', None)
-            plddt = st.session_state.get('plddt', None)
-            protein_name = st.session_state.get('protein_name', 'Protein')
-            if pdb_data:
-                st.subheader(f"3D Structure Viewer: {protein_name}")
-                with st.expander("3D Viewer Controls", expanded=False):
-                    style = st.selectbox("Style", ["cartoon", "surface", "sphere"], index=["cartoon", "surface", "sphere"].index(controls['render_style']))
-                    color = st.selectbox("Color Scheme", ["spectrum", "chain", "element", "white"], index=["spectrum", "chain", "element", "white"].index(controls['color_scheme']))
-                show_3d_structure(
-                    pdb_data,
-                    style=style,
-                    color_scheme=color,
-                    highlight_ligands=controls['show_ligands']
-                )
-
-                # --- Collapsible Ramachandran Plot ---
-                with st.expander("Ramachandran Plot"):
-                    phi_psi = get_phi_psi_angles(pdb_data)
-                    if phi_psi:
-                        fig = plot_ramachandran(phi_psi)
-                        st.pyplot(fig)
-                        stats = ramachandran_region_analysis(phi_psi)
-                        st.markdown(f"""
-                        **Ramachandran Plot Analysis**
-                        - **Total residues:** {stats['total']}
-                        - **Favored region:** {stats['favored']:.1f}%
-                        - **Allowed region:** {stats['allowed']:.1f}%
-                        - **Outlier region:** {stats['outlier']:.1f}%
-                        """)
-                    else:
-                        st.warning("Unable to generate Ramachandran plot. Please check the PDB input.")
-
-                # --- Mutation Simulator ---
-                with st.expander("🧬 Mutation Simulator (In Silico)"):
-                    parser = PDBParser(QUIET=True)
-                    structure = parser.get_structure("temp", StringIO(pdb_data))
-                    residues = [
-                        (res.parent.id, res.id[1], res.get_resname())
-                        for res in structure.get_residues()
-                        if res.id[0] == ' '
+            with st.expander("🧬 Mutation Simulator (In Silico)"):
+                parser = PDBParser(QUIET=True)
+                structure = parser.get_structure("temp", StringIO(pdb_data))
+                residues = [
+                    (res.parent.id, res.id[1], res.get_resname())
+                    for res in structure.get_residues()
+                    if res.id[0] == ' '
+                ]
+                if residues:
+                    residue_options = [
+                        f"Chain {chain} Residue {resnum} ({resname})"
+                        for chain, resnum, resname in residues
                     ]
-                    if residues:
-                        residue_options = [
-                            f"Chain {chain} Residue {resnum} ({resname})"
-                            for chain, resnum, resname in residues
-                        ]
-                        selected = st.selectbox("Select residue to mutate:", residue_options)
-                        selected_idx = residue_options.index(selected)
-                        sel_chain, sel_resnum, sel_resname = residues[selected_idx]
-                        aa_list = [
-                            "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY",
-                            "HIS", "ILE", "LEU", "LYS", "MET", "PHE", "PRO", "SER",
-                            "THR", "TRP", "TYR", "VAL"
-                        ]
-                        new_resname = st.selectbox("Mutate to:", aa_list, index=aa_list.index(sel_resname) if sel_resname in aa_list else 0)
-                        if st.button("Mutate and Analyze"):
-                            mutated_pdb = mutate_residue_in_pdb(pdb_data, sel_chain, sel_resnum, new_resname)
-                            st.success(f"Residue mutated: Chain {sel_chain} {sel_resname}{sel_resnum} → {new_resname}{sel_resnum}")
-                            st.subheader("Mutated Structure")
-                            show_3d_structure(mutated_pdb, style=style, color_scheme=color, highlight_ligands=controls['show_ligands'])
-                            st.subheader("Ramachandran Plot (Mutated)")
-                            phi_psi_mut = get_phi_psi_angles(mutated_pdb)
-                            if phi_psi_mut:
-                                fig_mut = plot_ramachandran(phi_psi_mut)
-                                st.pyplot(fig_mut)
-                                stats_mut = ramachandran_region_analysis(phi_psi_mut)
-                                st.markdown(f"""
-                                **Ramachandran Plot Analysis (Mutated)**
-                                - **Total residues:** {stats_mut['total']}
-                                - **Favored region:** {stats_mut['favored']:.1f}%
-                                - **Allowed region:** {stats_mut['allowed']:.1f}%
-                                - **Outlier region:** {stats_mut['outlier']:.1f}%
-                                """)
-                            else:
-                                st.warning("Unable to generate Ramachandran plot for mutated structure.")
-                    else:
-                        st.info("No residues found for mutation.")
+                    selected = st.selectbox("Select residue to mutate:", residue_options)
+                    selected_idx = residue_options.index(selected)
+                    sel_chain, sel_resnum, sel_resname = residues[selected_idx]
+                    aa_list = [
+                        "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY",
+                        "HIS", "ILE", "LEU", "LYS", "MET", "PHE", "PRO", "SER",
+                        "THR", "TRP", "TYR", "VAL"
+                    ]
+                    new_resname = st.selectbox("Mutate to:", aa_list, index=aa_list.index(sel_resname) if sel_resname in aa_list else 0)
+                    if st.button("Mutate and Analyze"):
+                        mutated_pdb = mutate_residue_in_pdb(pdb_data, sel_chain, sel_resnum, new_resname)
+                        st.success(f"Residue mutated: Chain {sel_chain} {sel_resname}{sel_resnum} → {new_resname}{sel_resnum}")
+                        st.subheader("Mutated Structure")
+                        show_3d_structure(mutated_pdb, style=style, color_scheme=color, highlight_ligands=controls['show_ligands'])
+                        st.subheader("Ramachandran Plot (Mutated)")
+                        phi_psi_mut = get_phi_psi_angles(mutated_pdb)
+                        if phi_psi_mut:
+                            fig_mut = plot_ramachandran(phi_psi_mut)
+                            st.pyplot(fig_mut)
+                            stats_mut = ramachandran_region_analysis(phi_psi_mut)
+                            st.markdown(f"""
+                            **Ramachandran Plot Analysis (Mutated)**
+                            - **Total residues:** {stats_mut['total']}
+                            - **Favored region:** {stats_mut['favored']:.1f}%
+                            - **Allowed region:** {stats_mut['allowed']:.1f}%
+                            - **Outlier region:** {stats_mut['outlier']:.1f}%
+                            """)
+                        else:
+                            st.warning("Unable to generate Ramachandran plot for mutated structure.")
+                else:
+                    st.info("No residues found for mutation.")
 
     with col2:
         st.header("Protein Dynamics")
@@ -440,7 +430,6 @@ def main():
                 fig = visualize_ligand_counts(ligands)
                 st.plotly_chart(fig)
 
-        # Fun: Show protein of the day
         name, pdbid = random.choice(PROTEIN_OF_DAY)
         st.info(f"**Protein of the Day:** {name} (PDB ID: {pdbid})")
 
