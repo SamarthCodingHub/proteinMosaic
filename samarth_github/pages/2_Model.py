@@ -5,12 +5,28 @@ from io import StringIO
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import py3Dmol
-import biotite.structure.io as bsio  # For pLDDT calculation
+import biotite.structure.io as bsio
+import random
+
+# ----------------------
+# Protein Facts
+# ----------------------
+PROTEIN_FACTS = [
+    "The largest known protein is titin, with over 38,000 amino acids.",
+    "Hemoglobin, a protein in your blood, carries oxygen from your lungs to your tissues.",
+    "Enzymes are proteins that speed up chemical reactions in living cells.",
+    "Green fluorescent protein (GFP) glows under UV light and is widely used as a biological marker.",
+    "Collagen is the most abundant protein in mammals and provides structure to skin and bones.",
+    "Spider silk proteins are stronger than steel by weight.",
+    "Insulin, a small protein, regulates blood sugar levels.",
+    "Proteins fold into unique 3D shapes to perform their functions.",
+    "Proteins can act as molecular machines, like ATP synthase.",
+    "The sequence of amino acids determines a protein's structure and function."
+]
 
 # ----------------------
 # Helper Functions
 # ----------------------
-
 @st.cache_data
 def fetch_pdb_data(pdb_id):
     url = f"https://files.rcsb.org/download/{pdb_id}.pdb"
@@ -225,6 +241,19 @@ def main():
         initial_sidebar_state="expanded"
     )
 
+    # --- INTERACTIVE FACTS & ESMFold HIGHLIGHT ---
+    st.markdown("## 🧬 Welcome to Protein Molecule Mosaic!")
+    st.info(
+        "✨ **Did you know?** " + random.choice(PROTEIN_FACTS),
+        icon="💡"
+    )
+    st.success(
+        "🚀 **You can predict protein 3D structure directly from sequence using ESMFold!**\n"
+        "Select **'Predict from Sequence (ESMFold)'** below, paste your sequence, and click 'Predict Structure with ESMFold'.",
+        icon="🧠"
+    )
+    st.markdown("---")
+
     controls = sidebar_controls()
     col1, col2 = st.columns([3, 1])
 
@@ -254,7 +283,6 @@ def main():
                 source = "pdbid"
                 if pdb_data:
                     st.success(f"PDB ID {pdb_id} loaded from RCSB.")
-
         elif input_mode == "Predict from Sequence (ESMFold)":
             example_seq = "MGSSHHHHHHSSGLVPRGSHMRGPNPTAASLEASAGPFTVRSFTVSRPSGYGAGTVYYPTNAGGTVGAIAIVPGYTARQSSIKWWGPRLASHGFVVITIDTNSTLDQPSSRSSQQMAALRQVASLNGTSSSPIYGKVDTARMGVMGWSMGGGGSLISAANNPSLKAAAPQAPWDSSTNFSSVTVPTLIFACENDSIAPVNSSALPIYDSMSRNAKQFLEINGGSHSCANSGNSNQALIGKKGVAWMKRFMDNDTRYSTFACENPNSTRVSDFRTANCSLEDPAANKARKEAELAAATAEQ"
             sequence = st.text_area("Paste your protein sequence (1-letter code):", value=example_seq, height=200)
@@ -276,12 +304,10 @@ def main():
 
         if pdb_data:
             st.subheader("3D Structure Viewer")
-            # Use a unique key for this checkbox in the main area
-            highlight_ligands = st.checkbox("Highlight Ligands", value=controls['show_ligands'], key="main_ligand_checkbox")
             show_3d_structure(
                 pdb_data,
                 style=controls['render_style'],
-                highlight_ligands=highlight_ligands
+                highlight_ligands=controls['show_ligands']
             )
 
             with st.expander("Ramachandran Plot"):
@@ -328,7 +354,7 @@ def main():
                         mutated_pdb = mutate_residue_in_pdb(pdb_data, sel_chain, sel_resnum, new_resname)
                         st.success(f"Residue mutated: Chain {sel_chain} {sel_resname}{sel_resnum} → {new_resname}{sel_resnum}")
                         st.subheader("Mutated Structure")
-                        show_3d_structure(mutated_pdb, style=controls['render_style'], highlight_ligands=highlight_ligands)
+                        show_3d_structure(mutated_pdb, style=controls['render_style'], highlight_ligands=controls['show_ligands'])
                         st.subheader("Ramachandran Plot (Mutated)")
                         phi_psi_mut = get_phi_psi_angles(mutated_pdb)
                         if phi_psi_mut:
