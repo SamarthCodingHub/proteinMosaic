@@ -6,29 +6,8 @@ import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import py3Dmol
 import biotite.structure.io as bsio
-import random
 
-# --- Fun facts & protein of the day ---
-PROTEIN_FACTS = [
-    "The largest known protein is titin, which contains over 38,000 amino acids!",
-    "Hemoglobin carries oxygen in your blood.",
-    "Enzymes are proteins that speed up chemical reactions.",
-    "Collagen is the most abundant protein in the human body.",
-    "Green fluorescent protein (GFP) glows under UV light and is used in research.",
-    "Proteins fold into unique 3D shapes to function properly.",
-    "Some spider silk proteins are stronger than steel by weight.",
-    "Insulin is a small protein that regulates blood sugar.",
-    "Proteins can act as molecular machines, like ATP synthase.",
-    "The sequence of amino acids determines a protein's structure and function."
-]
-PROTEIN_OF_DAY = [
-    ("Hemoglobin", "1A3N"),
-    ("Green Fluorescent Protein", "1EMA"),
-    ("Insulin", "4INS"),
-    ("Myoglobin", "1MBN"),
-    ("Lysozyme", "1LYZ"),
-    ("Ferritin", "2FHA")
-]
+# ---- Helper Functions (same as your paste.txt) ----
 
 @st.cache_data
 def fetch_pdb_data(pdb_id):
@@ -169,11 +148,11 @@ def ramachandran_region_analysis(phi_psi_list):
         "total": total
     }
 
-def show_3d_structure(pdb_data, style='cartoon', color_scheme='spectrum', highlight_ligands=True):
+def show_3d_structure(pdb_data, style='cartoon', highlight_ligands=True):
     view = py3Dmol.view(width=800, height=500)
     view.addModel(pdb_data, 'pdb')
     if style == 'cartoon':
-        view.setStyle({'cartoon': {'color': color_scheme}})
+        view.setStyle({'cartoon': {'color': 'spectrum'}})
     elif style == 'surface':
         view.setStyle({'cartoon': {'color': 'white'}})
         view.addSurface(py3Dmol.SAS, {'opacity': 0.7})
@@ -205,24 +184,11 @@ def mutate_residue_in_pdb(pdb_data, chain_id, resnum, new_resname):
             mutated_lines.append(line)
     return "\n".join(mutated_lines)
 
-# --- Sidebar Controls with Quick Actions ---
+# ---- Sidebar Controls ----
 def sidebar_controls():
     with st.sidebar:
         st.image("https://media.istockphoto.com/id/1390037416/photo/chain-of-amino-acid-or-bio-molecules-called-protein-3d-illustration.jpg?s=612x612&w=0&k=20&c=xSkGolb7TDjqibvINrQYJ_rqrh4RIIzKIj3iMj4bZqI=", width=400)
         st.title("Protein Molecule Mosaic")
-        st.markdown(f"> :sparkles: **{random.choice(PROTEIN_FACTS)}**")
-        st.markdown("### Quick Actions")
-        if st.button("Load Protein of the Day"):
-            name, pdbid = random.choice(PROTEIN_OF_DAY)
-            st.session_state['pdbid'] = pdbid
-            st.session_state['input_mode'] = "Fetch by PDB ID"
-            st.session_state['protein_name'] = name
-            st.experimental_rerun()
-        if st.button("Reset App"):
-            for k in st.session_state.keys():
-                del st.session_state[k]
-            st.experimental_rerun()
-        st.markdown("---")
         analysis_type = st.radio(
             "Analysis Mode:",
             ["Single Structure"],
@@ -234,22 +200,16 @@ def sidebar_controls():
             index=0,
             help="Choose molecular representation style"
         )
-        color_scheme = st.selectbox(
-            "3D Color Scheme:",
-            ["spectrum", "chain", "element", "white"],
-            index=0,
-            help="Change color scheme for 3D viewer"
-        )
         st.markdown("---")
         st.markdown("**Ligand Display Options**")
         show_ligands = st.checkbox("Highlight Ligands", True)
         return {
             'analysis_type': analysis_type,
             'render_style': render_style,
-            'color_scheme': color_scheme,
             'show_ligands': show_ligands,
         }
 
+# ---- Main App Logic ----
 def main():
     st.set_page_config(
         page_title="Protein Molecule Mosaic",
@@ -258,18 +218,6 @@ def main():
     )
 
     controls = sidebar_controls()
-    st.markdown("## Protein Molecule Mosaic")
-    st.markdown("> Welcome! Explore protein structure, dynamics, and mutations interactively. :microscope:")
-
-    steps = ["Choose Input", "Load Structure", "Analyze", "Visualize"]
-    step = 1
-    if 'pdb_data' in st.session_state:
-        step = 4
-    elif 'input_mode' in st.session_state:
-        step = 2
-    st.progress(step / len(steps))
-    st.markdown(f"**Step {step}: {steps[step-1]}**")
-
     col1, col2 = st.columns([3, 1])
 
     with col1:
@@ -278,43 +226,34 @@ def main():
 
         input_mode = st.radio(
             "Choose input mode:",
-            ["Upload PDB", "Fetch by PDB ID", "Predict from Sequence (ESMFold)"],
-            key="input_mode",
-            help="Select how you want to provide the protein structure."
+            ["Upload PDB", "Fetch by PDB ID", "Predict from Sequence (ESMFold)"]
         )
 
         pdb_data = None
+        source = None
         plddt = None
 
         if input_mode == "Upload PDB":
-            uploaded_pdb = st.file_uploader("Upload a PDB file", type=["pdb"], help="Upload your own PDB file for analysis.")
+            uploaded_pdb = st.file_uploader("Upload a PDB file", type=["pdb"])
             if uploaded_pdb is not None:
                 pdb_data = uploaded_pdb.read().decode("utf-8")
-                st.session_state['pdb_data'] = pdb_data
-                st.session_state['protein_name'] = uploaded_pdb.name
-                st.success(f"PDB file **{uploaded_pdb.name}** uploaded and loaded.")
-                st.balloons()
-                st.write(f"**Filename:** {uploaded_pdb.name}")
+                source = "upload"
+                st.success("PDB file uploaded and loaded.")
         elif input_mode == "Fetch by PDB ID":
-            pdb_id = st.text_input("Enter PDB ID:", value=st.session_state.get('pdbid', ''), help="e.g. 1A3N or 1EMA")
+            pdb_id = st.text_input("Enter PDB ID:").upper()
             if pdb_id:
-                with st.spinner("Fetching PDB from RCSB..."):
-                    pdb_data = fetch_pdb_data(pdb_id)
+                pdb_data = fetch_pdb_data(pdb_id)
+                source = "pdbid"
                 if pdb_data:
-                    st.session_state['pdb_data'] = pdb_data
-                    st.session_state['protein_name'] = pdb_id
-                    st.success(f"PDB ID **{pdb_id}** loaded from RCSB.")
-                    st.snow()
+                    st.success(f"PDB ID {pdb_id} loaded from RCSB.")
         elif input_mode == "Predict from Sequence (ESMFold)":
             example_seq = "MGSSHHHHHHSSGLVPRGSHMRGPNPTAASLEASAGPFTVRSFTVSRPSGYGAGTVYYPTNAGGTVGAIAIVPGYTARQSSIKWWGPRLASHGFVVITIDTNSTLDQPSSRSSQQMAALRQVASLNGTSSSPIYGKVDTARMGVMGWSMGGGGSLISAANNPSLKAAAPQAPWDSSTNFSSVTVPTLIFACENDSIAPVNSSALPIYDSMSRNAKQFLEINGGSHSCANSGNSNQALIGKKGVAWMKRFMDNDTRYSTFACENPNSTRVSDFRTANCSLEDPAANKARKEAELAAATAEQ"
-            sequence = st.text_area("Paste your protein sequence (1-letter code):", value=example_seq, height=200, help="Paste or type your sequence here.")
+            sequence = st.text_area("Paste your protein sequence (1-letter code):", value=example_seq, height=200)
             if st.button("Predict Structure with ESMFold"):
                 with st.spinner("Predicting structure..."):
                     pdb_data, plddt = esmfold_predict_structure(sequence)
+                    source = "esmfold"
                 if pdb_data:
-                    st.session_state['pdb_data'] = pdb_data
-                    st.session_state['protein_name'] = "ESMFold Prediction"
-                    st.session_state['plddt'] = plddt
                     st.success("Structure predicted with ESMFold!")
                     st.info(f"Average pLDDT: {plddt}")
                     st.download_button(
@@ -323,23 +262,14 @@ def main():
                         file_name='esmfold_predicted.pdb',
                         mime='text/plain',
                     )
-                    st.balloons()
                 else:
                     st.error("Prediction failed.")
 
-        # --- Show results right below input ---
-        pdb_data = st.session_state.get('pdb_data', None)
-        plddt = st.session_state.get('plddt', None)
-        protein_name = st.session_state.get('protein_name', 'Protein')
         if pdb_data:
-            st.subheader(f"3D Structure Viewer: {protein_name}")
-            with st.expander("3D Viewer Controls", expanded=False):
-                style = st.selectbox("Style", ["cartoon", "surface", "sphere"], index=["cartoon", "surface", "sphere"].index(controls['render_style']))
-                color = st.selectbox("Color Scheme", ["spectrum", "chain", "element", "white"], index=["spectrum", "chain", "element", "white"].index(controls['color_scheme']))
+            st.subheader("3D Structure Viewer")
             show_3d_structure(
                 pdb_data,
-                style=style,
-                color_scheme=color,
+                style=controls['render_style'],
                 highlight_ligands=controls['show_ligands']
             )
 
@@ -359,6 +289,7 @@ def main():
                 else:
                     st.warning("Unable to generate Ramachandran plot. Please check the PDB input.")
 
+            # --- Mutation Simulator ---
             with st.expander("🧬 Mutation Simulator (In Silico)"):
                 parser = PDBParser(QUIET=True)
                 structure = parser.get_structure("temp", StringIO(pdb_data))
@@ -367,6 +298,7 @@ def main():
                     for res in structure.get_residues()
                     if res.id[0] == ' '
                 ]
+
                 if residues:
                     residue_options = [
                         f"Chain {chain} Residue {resnum} ({resname})"
@@ -385,7 +317,7 @@ def main():
                         mutated_pdb = mutate_residue_in_pdb(pdb_data, sel_chain, sel_resnum, new_resname)
                         st.success(f"Residue mutated: Chain {sel_chain} {sel_resname}{sel_resnum} → {new_resname}{sel_resnum}")
                         st.subheader("Mutated Structure")
-                        show_3d_structure(mutated_pdb, style=style, color_scheme=color, highlight_ligands=controls['show_ligands'])
+                        show_3d_structure(mutated_pdb, style=controls['render_style'], highlight_ligands=controls['show_ligands'])
                         st.subheader("Ramachandran Plot (Mutated)")
                         phi_psi_mut = get_phi_psi_angles(mutated_pdb)
                         if phi_psi_mut:
@@ -406,8 +338,6 @@ def main():
 
     with col2:
         st.header("Protein Dynamics")
-        pdb_data = st.session_state.get('pdb_data', None)
-        plddt = st.session_state.get('plddt', None)
         if pdb_data:
             if plddt is not None:
                 st.info(f"ESMFold average pLDDT: {plddt}")
@@ -429,9 +359,6 @@ def main():
             with st.expander("Ligand Type Visualization"):
                 fig = visualize_ligand_counts(ligands)
                 st.plotly_chart(fig)
-
-        name, pdbid = random.choice(PROTEIN_OF_DAY)
-        st.info(f"**Protein of the Day:** {name} (PDB ID: {pdbid})")
 
 if __name__ == "__main__":
     main()
