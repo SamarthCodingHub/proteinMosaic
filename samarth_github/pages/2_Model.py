@@ -5,11 +5,11 @@ from io import StringIO
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import py3Dmol
-import biotite.structure.io as bsio
 
 # ----------------------
 # Helper Functions
 # ----------------------
+
 @st.cache_data
 def fetch_pdb_data(pdb_id):
     url = f"https://files.rcsb.org/download/{pdb_id}.pdb"
@@ -21,15 +21,14 @@ def fetch_pdb_data(pdb_id):
         st.error(f"Error fetching PDB data: {str(e)}")
         return None
 
-def predict_structure_with_esmfold(sequence):
-    url = "https://api.esmatlas.com/foldSequence/v1/pdb/"
+def esmfold_predict_structure(sequence):
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-    response = requests.post(url, headers=headers, data=sequence)
-    if response.status_code == 200:
-        return response.text
-    else:
-        st.error(f"ESMFold prediction failed: {response.text}")
+    response = requests.post('https://api.esmatlas.com/foldSequence/v1/pdb/', headers=headers, data=sequence)
+    if response.status_code != 200:
+        st.error("ESMFold API error: " + response.text)
         return None
+    pdb_string = response.content.decode('utf-8')
+    return pdb_string
 
 def classify_ligand(residue):
     resname = residue.get_resname().strip()
@@ -115,12 +114,12 @@ def plot_ramachandran(phi_psi):
     if phi_psi:
         phi, psi = zip(*phi_psi)
         ax.scatter(phi, psi, s=10)
-    ax.set_xlabel("Phi")
-    ax.set_ylabel("Psi")
-    ax.set_title("Ramachandran Plot")
-    ax.set_xlim(-180, 180)
-    ax.set_ylim(-180, 180)
-    ax.grid(True)
+        ax.set_xlabel("Phi")
+        ax.set_ylabel("Psi")
+        ax.set_title("Ramachandran Plot")
+        ax.set_xlim(-180, 180)
+        ax.set_ylim(-180, 180)
+        ax.grid(True)
     return fig
 
 def ramachandran_region_analysis(phi_psi_list):
@@ -128,7 +127,6 @@ def ramachandran_region_analysis(phi_psi_list):
     allowed = 0
     outlier = 0
     total = len(phi_psi_list)
-
     for phi, psi in phi_psi_list:
         if -160 <= phi <= -40 and -80 <= psi <= -20:
             favored += 1
@@ -138,10 +136,8 @@ def ramachandran_region_analysis(phi_psi_list):
             allowed += 1
         else:
             outlier += 1
-
     allowed = allowed - favored
     outlier = total - favored - allowed
-
     return {
         "favored": 100 * favored / total if total else 0,
         "allowed": 100 * allowed / total if total else 0,
@@ -185,26 +181,18 @@ def mutate_residue_in_pdb(pdb_data, chain_id, resnum, new_resname):
             mutated_lines.append(line)
     return "\n".join(mutated_lines)
 
-def get_plddt_from_pdb(pdb_string):
-    parser = PDBParser(QUIET=True)
-    structure = parser.get_structure("pred", StringIO(pdb_string))
-    b_factors = [atom.get_bfactor() for atom in structure.get_atoms()]
-    if b_factors:
-        return sum(b_factors)/len(b_factors)
-    else:
-        return None
-
 # ----------------------
 # UI Components
 # ----------------------
+
 def sidebar_controls():
     with st.sidebar:
         st.image("https://media.istockphoto.com/id/1390037416/photo/chain-of-amino-acid-or-bio-molecules-called-protein-3d-illustration.jpg?s=612x612&w=0&k=20&c=xSkGolb7TDjqibvINrQYJ_rqrh4RIIzKIj3iMj4bZqI=", width=400)
         st.title("Protein Molecule Mosaic")
-        input_mode = st.radio(
-            "Input Mode:",
-            ["PDB ID", "Upload PDB", "Predict from Sequence (ESMFold)"],
-            help="Choose how to provide a protein structure"
+        analysis_type = st.radio(
+            "Analysis Mode:",
+            ["Single Structure"],
+            help="Analyze single structure"
         )
         render_style = st.selectbox(
             "Rendering Style:",
@@ -216,54 +204,102 @@ def sidebar_controls():
         st.markdown("**Ligand Display Options**")
         show_ligands = st.checkbox("Highlight Ligands", True)
         return {
-            'input_mode': input_mode,
+            'analysis_type': analysis_type,
             'render_style': render_style,
             'show_ligands': show_ligands,
         }
 
 # ----------------------
+# HOME PAGE
+# ----------------------
+
+def home_page():
+    st.title("HOME PAGE")
+    st.header("Overview of the App")
+    st.markdown("""
+    **Protein Molecule Mosaic** is an interactive web application for exploring and analyzing protein structures (PDB files).
+
+    ### Objectives:
+    - Make protein structure visualization accessible and interactive
+    - Allow users to upload or fetch PDB files for analysis
+    - Identify and classify ligands and predict active sites
+    - Generate and analyze Ramachandran plots
+
+    ### Features:
+    - 3D visualization of protein structures (cartoon, surface, sphere)
+    - Upload PDB files or fetch by PDB ID
+    - Ligand classification (ion, monodentate, polydentate)
+    - Active site prediction based on catalytic residues
+    - Ramachandran plot generation with region analysis
+    - User-friendly sidebar controls
+    """)
+    st.header("About Me")
+    st.markdown("""
+    **Samarth Satalinga Kittad**
+    A passionate developer and computer aided drug discovery enthusiast.
+    I created this app to make protein analysis accessible, interactive, and visually engaging for students, researchers, and anyone curious about structural biology!
+    """)
+
+# ----------------------
 # Main App Logic
 # ----------------------
+
 def main():
     st.set_page_config(
         page_title="Protein Molecule Mosaic",
         layout="wide",
         initial_sidebar_state="expanded"
     )
+
     controls = sidebar_controls()
     col1, col2 = st.columns([3, 1])
 
     with col1:
         st.header("Protein Palette")
         st.markdown("**Load a protein structure:**")
+
+        # --- Input Mode Selection ---
+        input_mode = st.radio(
+            "Choose input mode:",
+            ["Upload PDB", "Fetch by PDB ID", "Predict from Sequence (ESMFold)"]
+        )
+
         pdb_data = None
         source = None
 
-        # --- NEW: Handle input modes ---
-        if controls['input_mode'] == "PDB ID":
-            pdb_id = st.text_input("Enter PDB ID (optional):").upper()
-            if pdb_id:
-                pdb_data = fetch_pdb_data(pdb_id)
-                source = "pdbid"
-                if pdb_data:
-                    st.success(f"PDB ID {pdb_id} loaded from RCSB.")
-        elif controls['input_mode'] == "Upload PDB":
+        if input_mode == "Upload PDB":
             uploaded_pdb = st.file_uploader("Upload a PDB file", type=["pdb"])
             if uploaded_pdb is not None:
                 pdb_data = uploaded_pdb.read().decode("utf-8")
                 source = "upload"
                 st.success("PDB file uploaded and loaded.")
-        elif controls['input_mode'] == "Predict from Sequence (ESMFold)":
+
+        elif input_mode == "Fetch by PDB ID":
+            pdb_id = st.text_input("Enter PDB ID:").upper()
+            if pdb_id:
+                pdb_data = fetch_pdb_data(pdb_id)
+                source = "pdbid"
+                if pdb_data:
+                    st.success(f"PDB ID {pdb_id} loaded from RCSB.")
+
+        elif input_mode == "Predict from Sequence (ESMFold)":
             example_seq = "MGSSHHHHHHSSGLVPRGSHMRGPNPTAASLEASAGPFTVRSFTVSRPSGYGAGTVYYPTNAGGTVGAIAIVPGYTARQSSIKWWGPRLASHGFVVITIDTNSTLDQPSSRSSQQMAALRQVASLNGTSSSPIYGKVDTARMGVMGWSMGGGGSLISAANNPSLKAAAPQAPWDSSTNFSSVTVPTLIFACENDSIAPVNSSALPIYDSMSRNAKQFLEINGGSHSCANSGNSNQALIGKKGVAWMKRFMDNDTRYSTFACENPNSTRVSDFRTANCSLEDPAANKARKEAELAAATAEQ"
-            seq = st.text_area("Input protein sequence (single-letter, no spaces):", value=example_seq, height=150)
+            sequence = st.text_area("Paste your protein sequence (1-letter code):", value=example_seq, height=200)
             if st.button("Predict Structure with ESMFold"):
                 with st.spinner("Predicting structure..."):
-                    pdb_data = predict_structure_with_esmfold(seq)
+                    pdb_data = esmfold_predict_structure(sequence)
                     source = "esmfold"
-                    if pdb_data:
-                        st.success("Structure predicted with ESMFold.")
+                if pdb_data:
+                    st.success("Structure predicted with ESMFold!")
+                    st.download_button(
+                        label="Download Predicted PDB",
+                        data=pdb_data,
+                        file_name='esmfold_predicted.pdb',
+                        mime='text/plain',
+                    )
+                else:
+                    st.error("Prediction failed.")
 
-        # --- Continue as before ---
         if pdb_data:
             st.subheader("3D Structure Viewer")
             show_3d_structure(
@@ -271,10 +307,6 @@ def main():
                 style=controls['render_style'],
                 highlight_ligands=controls['show_ligands']
             )
-            if source == "esmfold":
-                plddt = get_plddt_from_pdb(pdb_data)
-                if plddt:
-                    st.info(f"ESMFold average pLDDT confidence: {plddt:.2f}")
 
             with st.expander("Ramachandran Plot"):
                 phi_psi = get_phi_psi_angles(pdb_data)
@@ -301,6 +333,7 @@ def main():
                     for res in structure.get_residues()
                     if res.id[0] == ' '
                 ]
+
                 if residues:
                     residue_options = [
                         f"Chain {chain} Residue {resnum} ({resname})"
@@ -309,20 +342,18 @@ def main():
                     selected = st.selectbox("Select residue to mutate:", residue_options)
                     selected_idx = residue_options.index(selected)
                     sel_chain, sel_resnum, sel_resname = residues[selected_idx]
-
                     aa_list = [
                         "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY",
                         "HIS", "ILE", "LEU", "LYS", "MET", "PHE", "PRO", "SER",
                         "THR", "TRP", "TYR", "VAL"
                     ]
                     new_resname = st.selectbox("Mutate to:", aa_list, index=aa_list.index(sel_resname) if sel_resname in aa_list else 0)
+
                     if st.button("Mutate and Analyze"):
                         mutated_pdb = mutate_residue_in_pdb(pdb_data, sel_chain, sel_resnum, new_resname)
                         st.success(f"Residue mutated: Chain {sel_chain} {sel_resname}{sel_resnum} → {new_resname}{sel_resnum}")
-
                         st.subheader("Mutated Structure")
                         show_3d_structure(mutated_pdb, style=controls['render_style'], highlight_ligands=controls['show_ligands'])
-
                         st.subheader("Ramachandran Plot (Mutated)")
                         phi_psi_mut = get_phi_psi_angles(mutated_pdb)
                         if phi_psi_mut:
@@ -350,12 +381,14 @@ def main():
                 st.write(f"**Ion Names:** {', '.join(ligands['ion'])}")
                 st.write(f"**Monodentate Ligands:** {len(ligands['monodentate'])}")
                 st.write(f"**Polydentate Ligands:** {len(ligands['polydentate'])}")
+
             with st.expander("Active Sites"):
                 active_sites = predict_active_sites(pdb_data)
                 st.write(f"**Predicted Active Sites ({len(active_sites)} residues):**")
                 for site in active_sites:
                     st.write(f"{site['resname']} Chain {site['chain']} Residue {site['resnum']}")
                 st.info("Active sites are predicted based on common catalytic residues (HIS, ASP, GLU, SER, CYS, LYS, TYR, ARG).")
+
             with st.expander("Ligand Type Visualization"):
                 fig = visualize_ligand_counts(ligands)
                 st.plotly_chart(fig)
