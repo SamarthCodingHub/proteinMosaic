@@ -21,6 +21,15 @@ def fetch_pdb_data(pdb_id):
         st.error(f"Error fetching PDB data: {str(e)}")
         return None
 
+def esmfold_predict_structure(sequence):
+    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+    response = requests.post('https://api.esmatlas.com/foldSequence/v1/pdb/', headers=headers, data=sequence)
+    if response.status_code != 200:
+        st.error("ESMFold API error: " + response.text)
+        return None
+    pdb_string = response.content.decode('utf-8')
+    return pdb_string
+
 def classify_ligand(residue):
     resname = residue.get_resname().strip()
     if len(resname) <= 2:
@@ -201,6 +210,37 @@ def sidebar_controls():
         }
 
 # ----------------------
+# HOME PAGE
+# ----------------------
+
+def home_page():
+    st.title("HOME PAGE")
+    st.header("Overview of the App")
+    st.markdown("""
+    **Protein Molecule Mosaic** is an interactive web application for exploring and analyzing protein structures (PDB files).
+
+    ### Objectives:
+    - Make protein structure visualization accessible and interactive
+    - Allow users to upload or fetch PDB files for analysis
+    - Identify and classify ligands and predict active sites
+    - Generate and analyze Ramachandran plots
+
+    ### Features:
+    - 3D visualization of protein structures (cartoon, surface, sphere)
+    - Upload PDB files or fetch by PDB ID
+    - Ligand classification (ion, monodentate, polydentate)
+    - Active site prediction based on catalytic residues
+    - Ramachandran plot generation with region analysis
+    - User-friendly sidebar controls
+    """)
+    st.header("About Me")
+    st.markdown("""
+    **Samarth Satalinga Kittad**
+    A passionate developer and computer aided drug discovery enthusiast.
+    I created this app to make protein analysis accessible, interactive, and visually engaging for students, researchers, and anyone curious about structural biology!
+    """)
+
+# ----------------------
 # Main App Logic
 # ----------------------
 
@@ -218,20 +258,47 @@ def main():
         st.header("Protein Palette")
         st.markdown("**Load a protein structure:**")
 
-        pdb_id = st.text_input("Enter PDB ID (optional):").upper()
-        uploaded_pdb = st.file_uploader("Or upload a PDB file", type=["pdb"])
+        # --- Input Mode Selection ---
+        input_mode = st.radio(
+            "Choose input mode:",
+            ["Upload PDB", "Fetch by PDB ID", "Predict from Sequence (ESMFold)"]
+        )
+
         pdb_data = None
         source = None
 
-        if uploaded_pdb is not None:
-            pdb_data = uploaded_pdb.read().decode("utf-8")
-            source = "upload"
-            st.success("PDB file uploaded and loaded.")
-        elif pdb_id:
-            pdb_data = fetch_pdb_data(pdb_id)
-            source = "pdbid"
-            if pdb_data:
-                st.success(f"PDB ID {pdb_id} loaded from RCSB.")
+        if input_mode == "Upload PDB":
+            uploaded_pdb = st.file_uploader("Upload a PDB file", type=["pdb"])
+            if uploaded_pdb is not None:
+                pdb_data = uploaded_pdb.read().decode("utf-8")
+                source = "upload"
+                st.success("PDB file uploaded and loaded.")
+
+        elif input_mode == "Fetch by PDB ID":
+            pdb_id = st.text_input("Enter PDB ID:").upper()
+            if pdb_id:
+                pdb_data = fetch_pdb_data(pdb_id)
+                source = "pdbid"
+                if pdb_data:
+                    st.success(f"PDB ID {pdb_id} loaded from RCSB.")
+
+        elif input_mode == "Predict from Sequence (ESMFold)":
+            example_seq = "MGSSHHHHHHSSGLVPRGSHMRGPNPTAASLEASAGPFTVRSFTVSRPSGYGAGTVYYPTNAGGTVGAIAIVPGYTARQSSIKWWGPRLASHGFVVITIDTNSTLDQPSSRSSQQMAALRQVASLNGTSSSPIYGKVDTARMGVMGWSMGGGGSLISAANNPSLKAAAPQAPWDSSTNFSSVTVPTLIFACENDSIAPVNSSALPIYDSMSRNAKQFLEINGGSHSCANSGNSNQALIGKKGVAWMKRFMDNDTRYSTFACENPNSTRVSDFRTANCSLEDPAANKARKEAELAAATAEQ"
+            sequence = st.text_area("Paste your protein sequence (1-letter code):", value=example_seq, height=200)
+            if st.button("Predict Structure with ESMFold"):
+                with st.spinner("Predicting structure..."):
+                    pdb_data = esmfold_predict_structure(sequence)
+                    source = "esmfold"
+                if pdb_data:
+                    st.success("Structure predicted with ESMFold!")
+                    st.download_button(
+                        label="Download Predicted PDB",
+                        data=pdb_data,
+                        file_name='esmfold_predicted.pdb',
+                        mime='text/plain',
+                    )
+                else:
+                    st.error("Prediction failed.")
 
         if pdb_data:
             st.subheader("3D Structure Viewer")
@@ -304,20 +371,6 @@ def main():
                             st.warning("Unable to generate Ramachandran plot for mutated structure.")
                 else:
                     st.info("No residues found for mutation.")
-
-            # --- Custom Section Below Mutation Simulator ---
-            with st.expander("🔬 Custom Analysis Section"):
-                st.write("You can add any custom analysis, plots, or information here.")
-                # Example: Show the sequence of the loaded structure
-                parser = PDBParser(QUIET=True)
-                structure = parser.get_structure("temp", StringIO(pdb_data))
-                sequence = ""
-                for model in structure:
-                    for chain in model:
-                        for residue in chain:
-                            if residue.id[0] == " ":
-                                sequence += residue.resname + "-"
-                st.markdown(f"**Sequence (3-letter code):** {sequence}")
 
     with col2:
         st.header("Protein Dynamics")
