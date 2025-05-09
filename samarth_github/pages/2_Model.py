@@ -5,6 +5,7 @@ from io import StringIO
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import py3Dmol
+import biotite.structure.io as bsio
 
 # ----------------------
 # Helper Functions
