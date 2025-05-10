@@ -1,9 +1,7 @@
 import streamlit as st
 import requests
-from Bio.PDB import PDBParser, PPBuilder
+from Bio.PDB import PDBParser, PPBuilder, PDBIO, Superimposer, PDBException
 from io import StringIO
-from Bio.PDB import Superimposer
-from Bio.PDB import PDBParser, PPBuilder, PDBIO
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import py3Dmol
@@ -210,31 +208,46 @@ def superimpose_structures(pdb_data1, pdb_data2):
     structure1 = parser.get_structure("structure1", StringIO(pdb_data1))
     structure2 = parser.get_structure("structure2", StringIO(pdb_data2))
 
-    # Extract C-alpha atoms for superimposition
-    ca_atoms1 = []
-    for model in structure1:
-        for chain in model:
-            for residue in chain:
-                if residue.get_resname() != "HOH" and 'CA' in residue:
-                    ca_atoms1.append(residue['CA'])
+    # Function to extract C-alpha atoms with chain and residue info
+    def get_ca_atoms_with_id(structure):
+        atoms = []
+        for model in structure:
+            for chain in model:
+                for residue in chain:
+                    if residue.get_resname() != "HOH" and 'CA' in residue:
+                        atoms.append((chain.id, residue.id[1], residue['CA']))
+        return atoms
 
-    ca_atoms2 = []
-    for model in structure2:
-        for chain in model:
-            for residue in chain:
-                if residue.get_resname() != "HOH" and 'CA' in residue:
-                    ca_atoms2.append(residue['CA'])
+    atoms1_with_id = get_ca_atoms_with_id(structure1)
+    atoms2_with_id = get_ca_atoms_with_id(structure2)
 
-    if not ca_atoms1 or not ca_atoms2:
-        st.error("Not enough C-alpha atoms found for superimposition.")
+    # Identify common C-alpha atoms based on chain and residue number
+    common_atoms1 = []
+    common_atoms2 = []
+    matched_residues = {}
+
+    for chain1, resnum1, atom1 in atoms1_with_id:
+        for chain2, resnum2, atom2 in atoms2_with_id:
+            if chain1 == chain2 and resnum1 == resnum2:
+                common_atoms1.append(atom1)
+                common_atoms2.append(atom2)
+                matched_residues[(chain1, resnum1)] = True
+                break  # Move to the next atom in structure1
+
+    if not common_atoms1 or not common_atoms2 or len(common_atoms1) < 3:
+        st.error("Not enough common C-alpha atoms found for reliable superimposition.")
         return None, None
+
+    if len(common_atoms1) != len(common_atoms2):
+        st.warning(f"The number of common residues found is {len(common_atoms1)}, which is less than the total residues in each structure. The alignment might not be optimal.")
 
     superimposer = Superimposer()
-    superimposer.set_atoms(ca_atoms1, ca_atoms2)
-    if superimposer.rms > 100:  # A very high RMSD, indicating likely failure
-        st.error(f"Superimposition failed with a very high RMSD: {superimposer.rms:.2f} Å. Please check the input structures.")
+    superimposer.set_atoms(common_atoms1, common_atoms2)
+    try:
+        superimposer.apply(structure2.get_atoms())
+    except PDBException as e:
+        st.error(f"Superimposition failed: {e}")
         return None, None
-    superimposer.apply(structure2.get_atoms())
 
     # Save the aligned structure to a string
     aligned_structure_io = StringIO()
@@ -243,7 +256,6 @@ def superimpose_structures(pdb_data1, pdb_data2):
     aligned_structure_str = aligned_structure_io.getvalue()
 
     return aligned_structure_str, superimposer.rms
-   
 
 # ----------------------
 # UI Components
@@ -255,8 +267,8 @@ def sidebar_controls():
         st.title("Protein Molecule Mosaic")
         analysis_type = st.radio(
             "Analysis Mode:",
-            ["Single Structure"],
-            help="Analyze single structure"
+            ["Single Structure", "Structural Comparison"],
+            help="Choose the type of analysis to perform."
         )
         render_style = st.selectbox(
             "Rendering Style:",
