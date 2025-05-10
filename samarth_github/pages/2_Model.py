@@ -418,8 +418,29 @@ def main():
 
 with st.spinner("Superimposing structures..."):
     aligned_structure, rmsd_value = superimpose_structures(pdb_data1, pdb_data2)
-    if aligned_structure is not None:
-        st.success(f"Superimposition complete! RMSD: {rmsd_value:.2f} Å")
+    if controls['analysis_type'] == "Structural Comparison":
+        st.header("Structural Comparison")
+        uploaded_pdb1 = st.file_uploader("Upload the first PDB file", type=["pdb"], key="pdb1")
+        uploaded_pdb2 = st.file_uploader("Upload the second PDB file", type=["pdb"], key="pdb2")
+
+        if uploaded_pdb1 and uploaded_pdb2:
+            pdb_data1 = uploaded_pdb1.read().decode("utf-8")
+            pdb_data2 = uploaded_pdb2.read().decode("utf-8")
+            st.success("Both PDB files uploaded successfully.")
+
+            with st.spinner("Superimposing structures..."):
+                aligned_structure, rmsd_value = superimpose_structures(pdb_data1, pdb_data2)
+                st.success(f"Superimposition complete! RMSD: {rmsd_value:.2f} Å")
+
+            st.subheader("Superimposed 3D Structure")
+            show_3d_structure(aligned_structure, style=controls['render_style'], highlight_ligands=False)
+
+            st.download_button(
+                label="Download Aligned Structure",
+                data=aligned_structure,
+                file_name='aligned_structure.pdb',
+                mime='text/plain',
+            )
 
      
     with col2:
