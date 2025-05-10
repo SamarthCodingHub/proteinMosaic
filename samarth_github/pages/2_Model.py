@@ -8,6 +8,7 @@ import plotly.graph_objects as go
 import py3Dmol
 import biotite.structure.io as bsio
 import random
+import networkx as nx
 
 # ----------------------
 # Protein Facts
