@@ -205,26 +205,43 @@ def mutate_residue_in_pdb(pdb_data, chain_id, resnum, new_resname):
 
 def superimpose_structures(pdb_data1, pdb_data2):
     parser = PDBParser(QUIET=True)
+    io = PDBIO()  # Create a PDBIO object
     structure1 = parser.get_structure("structure1", StringIO(pdb_data1))
     structure2 = parser.get_structure("structure2", StringIO(pdb_data2))
-    
+
     # Extract C-alpha atoms for superimposition
-    ca_atoms1 = [atom for atom in structure1.get_atoms() if atom.get_name() == 'CA']
-    ca_atoms2 = [atom for atom in structure2.get_atoms() if atom.get_name() == 'CA']
-    
-    if len(ca_atoms1) != len(ca_atoms2):
-        st.error("The number of C-alpha atoms in the two structures must be the same for superimposition.")
+    ca_atoms1 = []
+    for model in structure1:
+        for chain in model:
+            for residue in chain:
+                if residue.get_resname() != "HOH" and 'CA' in residue:
+                    ca_atoms1.append(residue['CA'])
+
+    ca_atoms2 = []
+    for model in structure2:
+        for chain in model:
+            for residue in chain:
+                if residue.get_resname() != "HOH" and 'CA' in residue:
+                    ca_atoms2.append(residue['CA'])
+
+    if not ca_atoms1 or not ca_atoms2:
+        st.error("Not enough C-alpha atoms found for superimposition.")
         return None, None
-    
+
     superimposer = Superimposer()
     superimposer.set_atoms(ca_atoms1, ca_atoms2)
+    if superimposer.rms > 100:  # A very high RMSD, indicating likely failure
+        st.error(f"Superimposition failed with a very high RMSD: {superimposer.rms:.2f} Å. Please check the input structures.")
+        return None, None
     superimposer.apply(structure2.get_atoms())
-    
-    # Calculate RMSD
-    rmsd_value = superimposer.rms
-    return structure2, rmsd_value  # Return the aligned structure and RMSD
 
-      
+    # Save the aligned structure to a string
+    aligned_structure_io = StringIO()
+    io.set_structure(structure2)
+    io.save(aligned_structure_io)
+    aligned_structure_str = aligned_structure_io.getvalue()
+
+    return aligned_structure_str, superimposer.rms
    
 
 # ----------------------
