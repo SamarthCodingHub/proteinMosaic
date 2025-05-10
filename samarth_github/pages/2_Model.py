@@ -204,16 +204,27 @@ def mutate_residue_in_pdb(pdb_data, chain_id, resnum, new_resname):
     return "\n".join(mutated_lines)
 
 def superimpose_structures(pdb_data1, pdb_data2):
-       parser = PDBParser(QUIET=True)
-       structure1 = parser.get_structure("structure1", StringIO(pdb_data1))
-       structure2 = parser.get_structure("structure2", StringIO(pdb_data2))
-       # Extract C-alpha atoms for superimposition
-       ca_atoms1 = [atom for atom in structure1.get_atoms() if atom.get_name() == 'CA']
-       ca_atoms2 = [atom for atom in structure2.get_atoms() if atom.get_name() == 'CA']
-       superimposer = Superimposer()
-       superimposer.set_atoms(ca_atoms1, ca_atoms2)
-       superimposer.apply(structure2.get_atoms())
-       return structure2  # Return the aligned structure
+    parser = PDBParser(QUIET=True)
+    structure1 = parser.get_structure("structure1", StringIO(pdb_data1))
+    structure2 = parser.get_structure("structure2", StringIO(pdb_data2))
+    
+    # Extract C-alpha atoms for superimposition
+    ca_atoms1 = [atom for atom in structure1.get_atoms() if atom.get_name() == 'CA']
+    ca_atoms2 = [atom for atom in structure2.get_atoms() if atom.get_name() == 'CA']
+    
+    if len(ca_atoms1) != len(ca_atoms2):
+        st.error("The number of C-alpha atoms in the two structures must be the same for superimposition.")
+        return None, None
+    
+    superimposer = Superimposer()
+    superimposer.set_atoms(ca_atoms1, ca_atoms2)
+    superimposer.apply(structure2.get_atoms())
+    
+    # Calculate RMSD
+    rmsd_value = superimposer.rms
+    return structure2, rmsd_value  # Return the aligned structure and RMSD
+
+      
    
 
 # ----------------------
@@ -387,42 +398,11 @@ def main():
                 else:
                     st.info("No residues found for mutation.")
                     # --- Structural Comparison Section ---
-    if controls['analysis_type'] == "Structural Comparison":
-        st.header("Structural Comparison")
-        
-        # Upload two PDB files
-        uploaded_pdb1 = st.file_uploader("Upload the first PDB file", type=["pdb"], key="pdb1")
-        uploaded_pdb2 = st.file_uploader("Upload the second PDB file", type=["pdb"], key="pdb2")
 
-        if uploaded_pdb1 and uploaded_pdb2:
-            pdb_data1 = uploaded_pdb1.read().decode("utf-8")
-            pdb_data2 = uploaded_pdb2.read().decode("utf-8")
-            st.success("Both PDB files uploaded successfully.")
-
-            # Superimpose structures and calculate RMSD
-            with st.spinner("Superimposing structures..."):
-                aligned_structure, rmsd_value = superimpose_structures(pdb_data1, pdb_data2)
-                st.success(f"Superimposition complete! RMSD: {rmsd_value:.2f} Å")
-
-            # Show the superimposed structure
-            st.subheader("Superimposed 3D Structure")
-            show_3d_structure(pdb_data1, style=controls['render_style'], highlight_ligands=False)
-            show_3d_structure(pdb_data2, style=controls['render_style'], highlight_ligands=False)
-
-            # Optionally, show the aligned structure
-            st.subheader("Aligned Structure")
-            show_3d_structure(aligned_structure, style=controls['render_style'], highlight_ligands=False)
-
-            # Optionally, provide a download option for the aligned structure
-            st.download_button(
-                label="Download Aligned Structure",
-                data=aligned_structure,
-                file_name='aligned_structure.pdb',
-                mime='text/plain',
-            )
-
-        else:
-            st.warning("Please upload both PDB files for comparison.")
+with st.spinner("Superimposing structures..."):
+    aligned_structure, rmsd_value = superimpose_structures(pdb_data1, pdb_data2)
+    if aligned_structure is not None:
+        st.success(f"Superimposition complete! RMSD: {rmsd_value:.2f} Å")
 
      
     with col2:
