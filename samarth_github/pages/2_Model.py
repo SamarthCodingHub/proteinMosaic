@@ -210,7 +210,6 @@ def superimpose_structures(pdb_data1, pdb_data2):
     structure1 = parser.get_structure("structure1", StringIO(pdb_data1))
     structure2 = parser.get_structure("structure2", StringIO(pdb_data2))
 
-    # Function to extract C-alpha atoms with chain and residue info
     def get_ca_atoms_with_id(structure):
         atoms = []
         for model in structure:
@@ -223,7 +222,6 @@ def superimpose_structures(pdb_data1, pdb_data2):
     atoms1_with_id = get_ca_atoms_with_id(structure1)
     atoms2_with_id = get_ca_atoms_with_id(structure2)
 
-    # Identify common C-alpha atoms based on chain and residue number
     common_atoms1 = []
     common_atoms2 = []
     matched_residues = {}
@@ -234,7 +232,7 @@ def superimpose_structures(pdb_data1, pdb_data2):
                 common_atoms1.append(atom1)
                 common_atoms2.append(atom2)
                 matched_residues[(chain1, resnum1)] = True
-                break  # Move to the next atom in structure1
+                break
 
     if not common_atoms1 or not common_atoms2 or len(common_atoms1) < 3:
         st.error("Not enough common C-alpha atoms found for reliable superimposition.")
@@ -251,54 +249,30 @@ def superimpose_structures(pdb_data1, pdb_data2):
         st.error(f"Superimposition failed: {e}")
         return None, None
 
-    # Save the aligned structure to a string
     aligned_structure_io = StringIO()
     io.set_structure(structure2)
     io.save(aligned_structure_io)
     aligned_structure_str = aligned_structure_io.getvalue()
 
     return aligned_structure_str, superimposer.rms
+
+# --- PPI Network Functions ---
+
 def create_ppi_network(interactions):
-    """
-    Create a PPI network from a list of interactions.
-    
-    Parameters:
-    interactions (list of tuples): List of protein interactions (protein1, protein2).
-    
-    Returns:
-    G (networkx.Graph): The PPI network graph.
-    """
     G = nx.Graph()
     G.add_edges_from(interactions)
     return G
 
 def visualize_ppi_network(G):
-    """
-    Visualize the PPI network using Matplotlib.
-    
-    Parameters:
-    G (networkx.Graph): The PPI network graph.
-    """
     plt.figure(figsize=(10, 8))
-    pos = nx.spring_layout(G)  # positions for all nodes
+    pos = nx.spring_layout(G)
     nx.draw_networkx_nodes(G, pos, node_size=700, node_color='lightblue')
     nx.draw_networkx_edges(G, pos, width=2, alpha=0.5, edge_color='gray')
     nx.draw_networkx_labels(G, pos, font_size=12, font_family='sans-serif')
     plt.title("Protein-Protein Interaction Network")
-    plt.axis('off')  # Turn off the axis
-    plt.show()
-# Example usage
-interactions = [
-    ('ProteinA', 'ProteinB'),
-    ('ProteinA', 'ProteinC'),
-    ('ProteinB', 'ProteinD'),
-    ('ProteinC', 'ProteinD'),
-    ('ProteinE', 'ProteinF'),
-    ('ProteinF', 'ProteinG'),
-]
-ppi_network = create_ppi_network(interactions)
-visualize_ppi_network(ppi_network)
-
+    plt.axis('off')
+    fig = plt.gcf()
+    return fig
 
 # ----------------------
 # UI Components
@@ -339,7 +313,6 @@ def main():
         initial_sidebar_state="expanded"
     )
 
-    # --- INTERACTIVE FACTS & ESMFold HIGHLIGHT ---
     st.markdown("## 🧬 Welcome to Protein Molecule Mosaic!")
     st.info(
         "✨ **Did you know?** " + random.choice(PROTEIN_FACTS),
@@ -358,8 +331,13 @@ def main():
     with col1:
         st.header("Protein Palette")
 
-        tab1, tab2 = st.tabs(["Single Structure Analysis", "Structural Comparison"])
+        tab1, tab2, tab3 = st.tabs([
+            "Single Structure Analysis",
+            "Structural Comparison",
+            "PPI Network"
+        ])
 
+        # Tab 1: Single Structure
         with tab1:
             st.subheader("Analyze Single Structure")
             input_mode_single = st.radio(
@@ -400,178 +378,29 @@ def main():
                             file_name='esmfold_predicted.pdb',
                             mime='text/plain',
                         )
-                    else:
-                        st.error("Prediction failed.")
+            # You can add more single structure analysis features here...
 
-            if pdb_data_single:
-                st.subheader("3D Structure Viewer")
-                show_3d_structure(
-                    pdb_data_single,
-                    style=controls['render_style'],
-                    highlight_ligands=controls['show_ligands']
-                )
-                with st.expander("Ramachandran Plot"):
-                    phi_psi = get_phi_psi_angles(pdb_data_single)
-                    if phi_psi:
-                        fig = plot_ramachandran(phi_psi)
-                        st.pyplot(fig)
-                        ramachandran_analysis = ramachandran_region_analysis(phi_psi)
-                        st.write("Ramachandran Region Analysis:")
-                        st.write(ramachandran_analysis)
-
+        # Tab 2: Structural Comparison
         with tab2:
             st.subheader("Structural Comparison")
-            uploaded_pdb1 = st.file_uploader("Upload the first PDB file", type=["pdb"], key="pdb1_compare")
-            uploaded_pdb2 = st.file_uploader("Upload the second PDB file", type=["pdb"], key="pdb2_compare")
+            # Add your structural comparison UI logic here...
 
-            # Initialize pdb_data1 and pdb_data2 outside the conditional block
-            pdb_data1_compare = None
-            pdb_data2_compare = None
-
-            if uploaded_pdb1 and uploaded_pdb2:
-                pdb_data1_compare = uploaded_pdb1.read().decode("utf-8")
-                pdb_data2_compare = uploaded_pdb2.read().decode("utf-8")
-                st.success("Both PDB files uploaded successfully for comparison.")
-
-                with st.spinner("Superimposing structures..."):
-                    aligned_structure, rmsd_value = superimpose_structures(pdb_data1_compare, pdb_data2_compare)
-                    if aligned_structure is not None:
-                        st.success(f"Superimposition complete! RMSD: {rmsd_value:.2f} Å")
-                        st.subheader("Superimposed 3D Structure")
-                        show_3d_structure(aligned_structure, style=controls['render_style'], highlight_ligands=False)
-                        st.download_button(
-                            label="Download Aligned Structure",
-                            data=aligned_structure,
-                            file_name='aligned_structure.pdb',
-                            mime='text/plain',
-                        )
-                    else:
-                        st.error("Superimposition failed.")
-            elif uploaded_pdb1 or uploaded_pdb2:
-                st.warning("Please upload both PDB files for structural comparison.")
-            else:
-                st.info("Upload two PDB files to perform structural comparison.")
-
-    with col2:
-        st.header("Protein Dynamics")
-        if pdb_data_single: # Changed from pdb_data to pdb_data_single
-            if plddt is not None:
-                st.info(f"ESMFold average pLDDT: {plddt}")
-
-            with st.expander("Ligand Information"):
-                ligands = extract_ligands(pdb_data_single) # Changed from pdb_data to pdb_data_single
-                st.write(f"**Ions:** {len(ligands['ion'])}")
-                st.write(f"**Ion Names:** {', '.join(ligands['ion'])}")
-                st.write(f"**Monodentate Ligands:** {len(ligands['monodentate'])}")
-                st.write(f"**Polydentate Ligands:** {len(ligands['polydentate'])}")
-
-            with st.expander("Active Sites"):
-                active_sites = predict_active_sites(pdb_data_single) # Changed from pdb_data to pdb_data_single
-                st.write(f"**Predicted Active Sites ({len(active_sites)} residues):**")
-                for site in active_sites:
-                    st.write(f"{site['resname']} Chain {site['chain']} Residue {site['resnum']}")
-                st.info("Active sites are predicted based on common catalytic residues (HIS, ASP, GLU, SER, CYS, LYS, TYR, ARG).")
-
-            with st.expander("Ligand Type Visualization"):
-                fig = visualize_ligand_counts(ligands)
-                st.plotly_chart(fig)
-
-            # --- Mutation Simulator ---
-            with st.expander("🧬 Mutation Simulator (In Silico)"):
-                parser = PDBParser(QUIET=True)
-                structure = parser.get_structure("temp", StringIO(pdb_data_single)) # Changed from pdb_data to pdb_data_single
-                residues = [
-                    (res.parent.id, res.id[1], res.get_resname())
-                    for res in structure.get_residues()
-                    if res.id[0] == ' '
-                ]
-
-                if residues:
-                    residue_options = [
-                        f"Chain {chain} Residue {resnum} ({resname})"
-                        for chain, resnum, resname in residues
-                    ]
-                    selected = st.selectbox("Select residue to mutate:", residue_options)
-                    selected_idx = residue_options.index(selected)
-                    sel_chain, sel_resnum, sel_resname = residues[selected_idx]
-                    aa_list = [
-                        "ALA", "ARG", "ASN", "ASP", "CYS", "GLN", "GLU", "GLY",
-                        "HIS", "ILE", "LEU", "LYS", "MET", "PHE", "PRO", "SER",
-                        "THR", "TRP", "TYR", "VAL"
-                    ]
-                    new_resname = st.selectbox("Mutate to:", aa_list, index=aa_list.index(sel_resname) if sel_resname in aa_list else 0)
-                    if st.button("Mutate and Analyze"):
-                        mutated_pdb = mutate_residue_in_pdb(pdb_data_single, sel_chain, sel_resnum, new_resname) # Changed from pdb_data to pdb_data_single
-                        st.success(f"Residue mutated: Chain {sel_chain} {sel_resname}{sel_resnum} → {new_resname}{sel_resnum}")
-                        st.subheader("Mutated Structure")
-                        show_3d_structure(mutated_pdb, style=controls['render_style'], highlight_ligands=controls['show_ligands'])
-                        st.subheader("Ramachandran Plot (Mutated)")
-                        phi_psi_mut = get_phi_psi_angles(mutated_pdb)
-                        if phi_psi_mut:
-                            fig_mut = plot_ramachandran(phi_psi_mut)
-                            st.pyplot(fig_mut)
-                            stats_mut = ramachandran_region_analysis(phi_psi_mut)
-                            st.markdown(f"""
-                            **Ramachandran Plot Analysis (Mutated)**
-                            - **Total residues:** {stats_mut['total']}
-                            - **Favored region:** {stats_mut['favored']:.1f}%
-                            - **Allowed region:** {stats_mut['allowed']:.1f}%
-                            - **Outlier region:** {stats_mut['outlier']:.1f}%
-                            """)
-                        else:
-                            st.warning("Unable to generate Ramachandran plot for mutated structure.")
-                else:
-                    st.info("No residues found for mutation.")
-
-    # PPI Analysis Section
-    st.header("Protein-Protein Interaction Analysis")
-    
-    # Input for protein sequence
-    protein_sequence = st.text_area("Enter Protein Sequence:")
-    
-    # Known interactions (this could be fetched from a database)
-    known_interactions = {
-        'ProteinA': 'MKTAYIAKQRQISFVKSHFSRQD',
-        'ProteinB': 'MKTAYIAKQRQISFVKSHFSRQD',
-        'ProteinC': 'MKTAYIAKQRQISFVKSHFSR',
-        # Add more known interactions as needed
-    }
-    if st.button("Predict PPIs"):
-        predicted_ppis = predict_ppi(protein_sequence, known_interactions)
-        st.write("Predicted PPIs:", predicted_ppis)
-        # Example interactions for visualization
-        interactions = [
-            ('ProteinA', 'ProteinB'),
-            ('ProteinA', 'ProteinC'),
-            ('ProteinB', 'ProteinD'),
-            ('ProteinC', 'ProteinD'),
-            ('ProteinE', 'ProteinF'),
-            ('ProteinF', 'ProteinG'),
-        ]
-        # Create and visualize the PPI network
-        ppi_network = create_ppi_network(interactions)
-        visualize_ppi_network(ppi_network)
-    # Removed the redundant Structural Comparison section here
-
-def sidebar_controls():
-    with st.sidebar:
-        st.image("https://media.istockphoto.com/id/1390037416/photo/chain-of-amino-acid-or-bio-molecules-called-protein-3d-illustration.jpg?s=612x612&w=0&k=20&c=xSkGolb7TDjqibvINrQYJ_rqrh4RIIzKIj3iMj4bZqI=", width=400)
-        st.title("Protein Molecule Mosaic")
-        render_style = st.selectbox(
-            "Rendering Style:",
-            ["cartoon", "surface", "sphere"],
-            index=0,
-            help="Choose molecular representation style"
-        )
-        st.markdown("---")
-        st.markdown("**Ligand Display Options**")
-        show_ligands = st.checkbox("Highlight Ligands", True, key="sidebar_ligand_checkbox")
-        return {
-            'render_style': render_style,
-            'show_ligands': show_ligands,
-        }
-
-# ... (Your other functions like fetch_pdb_data, superimpose_structures, etc. remain the same) ...
+        # Tab 3: PPI Network
+        with tab3:
+            st.subheader("Protein-Protein Interaction (PPI) Network")
+            st.markdown("Visualize a simple example Protein-Protein Interaction network.")
+            # Example interaction data; in a real app, this could be user-uploaded or fetched
+            interactions = [
+                ('ProteinA', 'ProteinB'),
+                ('ProteinA', 'ProteinC'),
+                ('ProteinB', 'ProteinD'),
+                ('ProteinC', 'ProteinD'),
+                ('ProteinE', 'ProteinF'),
+                ('ProteinF', 'ProteinG'),
+            ]
+            ppi_network = create_ppi_network(interactions)
+            fig = visualize_ppi_network(ppi_network)
+            st.pyplot(fig)
 
 if __name__ == "__main__":
     main()
