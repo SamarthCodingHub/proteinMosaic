@@ -3,6 +3,7 @@ import requests
 from Bio.PDB import PDBParser, PPBuilder
 from io import StringIO
 from Bio.PDB import Superimposer
+from Bio.PDB import PDBParser, PPBuilder, PDBIO
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import py3Dmol
