@@ -301,77 +301,129 @@ def main():
 
     with col1:
         st.header("Protein Palette")
-        st.markdown("**Load a protein structure:**")
 
-        input_mode = st.radio(
-            "Choose input mode:",
-            ["Upload PDB", "Fetch by PDB ID", "Predict from Sequence (ESMFold)"]
-        )
+        tab1, tab2 = st.tabs(["Single Structure Analysis", "Structural Comparison"])
 
-        pdb_data = None
-        source = None
-        plddt = None
-
-        if input_mode == "Upload PDB":
-            uploaded_pdb = st.file_uploader("Upload a PDB file", type=["pdb"])
-            if uploaded_pdb is not None:
-                pdb_data = uploaded_pdb.read().decode("utf-8")
-                source = "upload"
-                st.success("PDB file uploaded and loaded.")
-        elif input_mode == "Fetch by PDB ID":
-            pdb_id = st.text_input("Enter PDB ID:").upper()
-            if pdb_id:
-                pdb_data = fetch_pdb_data(pdb_id)
-                source = "pdbid"
-                if pdb_data:
-                    st.success(f"PDB ID {pdb_id} loaded from RCSB.")
-        elif input_mode == "Predict from Sequence (ESMFold)":
-            example_seq = "MGSSHHHHHHSSGLVPRGSHMRGPNPTAASLEASAGPFTVRSFTVSRPSGYGAGTVYYPTNAGGTVGAIAIVPGYTARQSSIKWWGPRLASHGFVVITIDTNSTLDQPSSRSSQQMAALRQVASLNGTSSSPIYGKVDTARMGVMGWSMGGGGSLISAANNPSLKAAAPQAPWDSSTNFSSVTVPTLIFACENDSIAPVNSSALPIYDSMSRNAKQFLEINGGSHSCANSGNSNQALIGKKGVAWMKRFMDNDTRYSTFACENPNSTRVSDFRTANCSLEDPAANKARKEAELAAATAEQ"
-            sequence = st.text_area("Paste your protein sequence (1-letter code):", value=example_seq, height=200)
-            if st.button("Predict Structure with ESMFold"):
-                with st.spinner("Predicting structure..."):
-                    pdb_data, plddt = esmfold_predict_structure(sequence)
-                    source = "esmfold"
-                if pdb_data:
-                    st.success("Structure predicted with ESMFold!")
-                    st.info(f"Average pLDDT: {plddt}")
-                    st.download_button(
-                        label="Download Predicted PDB",
-                        data=pdb_data,
-                        file_name='esmfold_predicted.pdb',
-                        mime='text/plain',
-                    )
-                else:
-                    st.error("Prediction failed.")
-
-        if pdb_data:
-            st.subheader("3D Structure Viewer")
-            show_3d_structure(
-                pdb_data,
-                style=controls['render_style'],
-                highlight_ligands=controls['show_ligands']
+        with tab1:
+            st.subheader("Analyze Single Structure")
+            input_mode_single = st.radio(
+                "Choose input mode:",
+                ["Upload PDB", "Fetch by PDB ID", "Predict from Sequence (ESMFold)"],
+                key="single_input_mode"
             )
+            pdb_data_single = None
+            source_single = None
+            plddt = None
 
-            with st.expander("Ramachandran Plot"):
-                phi_psi = get_phi_psi_angles(pdb_data)
-                if phi_psi:
-                    fig = plot_ramachandran(phi_psi)
-                    st.pyplot(fig)
-                    stats = ramachandran_region_analysis(phi_psi)
-                    st.markdown(f"""
-                    **Ramachandran Plot Analysis**
-                    - **Total residues:** {stats['total']}
-                    - **Favored region:** {stats['favored']:.1f}%
-                    - **Allowed region:** {stats['allowed']:.1f}%
-                    - **Outlier region:** {stats['outlier']:.1f}%
-                    """)
-                else:
-                    st.warning("Unable to generate Ramachandran plot. Please check the PDB input.")
+            if input_mode_single == "Upload PDB":
+                uploaded_pdb = st.file_uploader("Upload a PDB file", type=["pdb"], key="single_upload")
+                if uploaded_pdb is not None:
+                    pdb_data_single = uploaded_pdb.read().decode("utf-8")
+                    source_single = "upload"
+                    st.success("PDB file uploaded and loaded.")
+            elif input_mode_single == "Fetch by PDB ID":
+                pdb_id = st.text_input("Enter PDB ID:", key="single_pdbid").upper()
+                if pdb_id:
+                    pdb_data_single = fetch_pdb_data(pdb_id)
+                    source_single = "pdbid"
+                    if pdb_data_single:
+                        st.success(f"PDB ID {pdb_id} loaded from RCSB.")
+            elif input_mode_single == "Predict from Sequence (ESMFold)":
+                example_seq = "MGSSHHHHHHSSGLVPRGSHMRGPNPTAASLEASAGPFTVRSFTVSRPSGYGAGTVYYPTNAGGTVGAIAIVPGYTARQSSIKWWGPRLASHGFVVITIDTNSTLDQPSSRSSQQMAALRQVASLNGTSSSPIYGKVDTARMGVMGWSMGGGGSLISAANNPSLKAAAPQAPWDSSTNFSSVTVPTLIFACENDSIAPVNSSALPIYDSMSRNAKQFLEINGGSHSCANSGNSNQALIGKKGVAWMKRFMDNDTRYSTFACENPNSTRVSDFRTANCSLEDPAANKARKEAELAAATAEQ"
+                sequence = st.text_area("Paste your protein sequence (1-letter code):", value=example_seq, height=200)
+                if st.button("Predict Structure with ESMFold"):
+                    with st.spinner("Predicting structure..."):
+                        pdb_data_single, plddt = esmfold_predict_structure(sequence)
+                        source_single = "esmfold"
+                    if pdb_data_single:
+                        st.success("Structure predicted with ESMFold!")
+                        st.info(f"Average pLDDT: {plddt}")
+                        st.download_button(
+                            label="Download Predicted PDB",
+                            data=pdb_data_single,
+                            file_name='esmfold_predicted.pdb',
+                            mime='text/plain',
+                        )
+                    else:
+                        st.error("Prediction failed.")
+
+            if pdb_data_single:
+                st.subheader("3D Structure Viewer")
+                show_3d_structure(
+                    pdb_data_single,
+                    style=controls['render_style'],
+                    highlight_ligands=controls['show_ligands']
+                )
+                with st.expander("Ramachandran Plot"):
+                    phi_psi = get_phi_psi_angles(pdb_data_single)
+                    if phi_psi:
+                        fig = plot_ramachandran(phi_psi)
+                        st.pyplot(fig)
+                        ramachandran_analysis = ramachandran_region_analysis(phi_psi)
+                        st.write("Ramachandran Region Analysis:")
+                        st.write(ramachandran_analysis)
+
+        with tab2:
+            st.subheader("Structural Comparison")
+            uploaded_pdb1 = st.file_uploader("Upload the first PDB file", type=["pdb"], key="pdb1_compare")
+            uploaded_pdb2 = st.file_uploader("Upload the second PDB file", type=["pdb"], key="pdb2_compare")
+
+            # Initialize pdb_data1 and pdb_data2 outside the conditional block
+            pdb_data1_compare = None
+            pdb_data2_compare = None
+
+            if uploaded_pdb1 and uploaded_pdb2:
+                pdb_data1_compare = uploaded_pdb1.read().decode("utf-8")
+                pdb_data2_compare = uploaded_pdb2.read().decode("utf-8")
+                st.success("Both PDB files uploaded successfully for comparison.")
+
+                with st.spinner("Superimposing structures..."):
+                    aligned_structure, rmsd_value = superimpose_structures(pdb_data1_compare, pdb_data2_compare)
+                    if aligned_structure is not None:
+                        st.success(f"Superimposition complete! RMSD: {rmsd_value:.2f} Å")
+                        st.subheader("Superimposed 3D Structure")
+                        show_3d_structure(aligned_structure, style=controls['render_style'], highlight_ligands=False)
+                        st.download_button(
+                            label="Download Aligned Structure",
+                            data=aligned_structure,
+                            file_name='aligned_structure.pdb',
+                            mime='text/plain',
+                        )
+                    else:
+                        st.error("Superimposition failed.")
+            elif uploaded_pdb1 or uploaded_pdb2:
+                st.warning("Please upload both PDB files for structural comparison.")
+            else:
+                st.info("Upload two PDB files to perform structural comparison.")
+
+    with col2:
+        st.header("Protein Dynamics")
+        if pdb_data_single: # Changed from pdb_data to pdb_data_single
+            if plddt is not None:
+                st.info(f"ESMFold average pLDDT: {plddt}")
+
+            with st.expander("Ligand Information"):
+                ligands = extract_ligands(pdb_data_single) # Changed from pdb_data to pdb_data_single
+                st.write(f"**Ions:** {len(ligands['ion'])}")
+                st.write(f"**Ion Names:** {', '.join(ligands['ion'])}")
+                st.write(f"**Monodentate Ligands:** {len(ligands['monodentate'])}")
+                st.write(f"**Polydentate Ligands:** {len(ligands['polydentate'])}")
+
+            with st.expander("Active Sites"):
+                active_sites = predict_active_sites(pdb_data_single) # Changed from pdb_data to pdb_data_single
+                st.write(f"**Predicted Active Sites ({len(active_sites)} residues):**")
+                for site in active_sites:
+                    st.write(f"{site['resname']} Chain {site['chain']} Residue {site['resnum']}")
+                st.info("Active sites are predicted based on common catalytic residues (HIS, ASP, GLU, SER, CYS, LYS, TYR, ARG).")
+
+            with st.expander("Ligand Type Visualization"):
+                fig = visualize_ligand_counts(ligands)
+                st.plotly_chart(fig)
 
             # --- Mutation Simulator ---
             with st.expander("🧬 Mutation Simulator (In Silico)"):
                 parser = PDBParser(QUIET=True)
-                structure = parser.get_structure("temp", StringIO(pdb_data))
+                structure = parser.get_structure("temp", StringIO(pdb_data_single)) # Changed from pdb_data to pdb_data_single
                 residues = [
                     (res.parent.id, res.id[1], res.get_resname())
                     for res in structure.get_residues()
@@ -393,7 +445,7 @@ def main():
                     ]
                     new_resname = st.selectbox("Mutate to:", aa_list, index=aa_list.index(sel_resname) if sel_resname in aa_list else 0)
                     if st.button("Mutate and Analyze"):
-                        mutated_pdb = mutate_residue_in_pdb(pdb_data, sel_chain, sel_resnum, new_resname)
+                        mutated_pdb = mutate_residue_in_pdb(pdb_data_single, sel_chain, sel_resnum, new_resname) # Changed from pdb_data to pdb_data_single
                         st.success(f"Residue mutated: Chain {sel_chain} {sel_resname}{sel_resnum} → {new_resname}{sel_resnum}")
                         st.subheader("Mutated Structure")
                         show_3d_structure(mutated_pdb, style=controls['render_style'], highlight_ligands=controls['show_ligands'])
@@ -414,57 +466,28 @@ def main():
                             st.warning("Unable to generate Ramachandran plot for mutated structure.")
                 else:
                     st.info("No residues found for mutation.")
-                    # --- Structural Comparison Section ---
 
+    # Removed the redundant Structural Comparison section here
 
-    if controls['analysis_type'] == "Structural Comparison":
-        st.header("Structural Comparison")
-        uploaded_pdb1 = st.file_uploader("Upload the first PDB file", type=["pdb"], key="pdb1")
-        uploaded_pdb2 = st.file_uploader("Upload the second PDB file", type=["pdb"], key="pdb2")
+def sidebar_controls():
+    with st.sidebar:
+        st.image("https://media.istockphoto.com/id/1390037416/photo/chain-of-amino-acid-or-bio-molecules-called-protein-3d-illustration.jpg?s=612x612&w=0&k=20&c=xSkGolb7TDjqibvINrQYJ_rqrh4RIIzKIj3iMj4bZqI=", width=400)
+        st.title("Protein Molecule Mosaic")
+        render_style = st.selectbox(
+            "Rendering Style:",
+            ["cartoon", "surface", "sphere"],
+            index=0,
+            help="Choose molecular representation style"
+        )
+        st.markdown("---")
+        st.markdown("**Ligand Display Options**")
+        show_ligands = st.checkbox("Highlight Ligands", True, key="sidebar_ligand_checkbox")
+        return {
+            'render_style': render_style,
+            'show_ligands': show_ligands,
+        }
 
-        if uploaded_pdb1 and uploaded_pdb2:
-            pdb_data1 = uploaded_pdb1.read().decode("utf-8")
-            pdb_data2 = uploaded_pdb2.read().decode("utf-8")
-            st.success("Both PDB files uploaded successfully.")
-
-            with st.spinner("Superimposing structures..."):
-                aligned_structure, rmsd_value = superimpose_structures(pdb_data1, pdb_data2)
-                st.success(f"Superimposition complete! RMSD: {rmsd_value:.2f} Å")
-
-            st.subheader("Superimposed 3D Structure")
-            show_3d_structure(aligned_structure, style=controls['render_style'], highlight_ligands=False)
-
-            st.download_button(
-                label="Download Aligned Structure",
-                data=aligned_structure,
-                file_name='aligned_structure.pdb',
-                mime='text/plain',
-            )
-
-     
-    with col2:
-        st.header("Protein Dynamics")
-        if pdb_data:
-            if plddt is not None:
-                st.info(f"ESMFold average pLDDT: {plddt}")
-
-            with st.expander("Ligand Information"):
-                ligands = extract_ligands(pdb_data)
-                st.write(f"**Ions:** {len(ligands['ion'])}")
-                st.write(f"**Ion Names:** {', '.join(ligands['ion'])}")
-                st.write(f"**Monodentate Ligands:** {len(ligands['monodentate'])}")
-                st.write(f"**Polydentate Ligands:** {len(ligands['polydentate'])}")
-
-            with st.expander("Active Sites"):
-                active_sites = predict_active_sites(pdb_data)
-                st.write(f"**Predicted Active Sites ({len(active_sites)} residues):**")
-                for site in active_sites:
-                    st.write(f"{site['resname']} Chain {site['chain']} Residue {site['resnum']}")
-                st.info("Active sites are predicted based on common catalytic residues (HIS, ASP, GLU, SER, CYS, LYS, TYR, ARG).")
-
-            with st.expander("Ligand Type Visualization"):
-                fig = visualize_ligand_counts(ligands)
-                st.plotly_chart(fig)
+# ... (Your other functions like fetch_pdb_data, superimpose_structures, etc. remain the same) ...
 
 if __name__ == "__main__":
     main()
