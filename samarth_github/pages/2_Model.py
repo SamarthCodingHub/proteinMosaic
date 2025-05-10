@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
-from Bio.PDB import PDBParser, PPBuilder, PDBIO, Superimposer, PDBException
+from Bio.PDB import PDBParser, PPBuilder, PDBIO, Superimposer
+from Bio.PDB.PDBExceptions import PDBException
 from io import StringIO
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
