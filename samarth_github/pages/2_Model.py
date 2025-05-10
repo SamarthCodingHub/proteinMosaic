@@ -416,8 +416,7 @@ def main():
                     st.info("No residues found for mutation.")
                     # --- Structural Comparison Section ---
 
-with st.spinner("Superimposing structures..."):
-    aligned_structure, rmsd_value = superimpose_structures(pdb_data1, pdb_data2)
+
     if controls['analysis_type'] == "Structural Comparison":
         st.header("Structural Comparison")
         uploaded_pdb1 = st.file_uploader("Upload the first PDB file", type=["pdb"], key="pdb1")
