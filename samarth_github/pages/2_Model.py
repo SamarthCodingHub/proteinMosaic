@@ -258,18 +258,50 @@ def superimpose_structures(pdb_data1, pdb_data2):
 
 # --- PPI Network Functions ---
 
+def extract_chain_interactions(pdb_data, distance_cutoff=5.0, max_pairs=10000):
+    """
+    Detects interactions between chains in a PDB file based on atom proximity.
+    Returns a list of tuples (chain1, chain2).
+    """
+    parser = PDBParser(QUIET=True)
+    structure = parser.get_structure("uploaded", StringIO(pdb_data))
+    chains = list(structure.get_chains())
+    interactions = set()
+    pair_count = 0
+
+    for i, chain1 in enumerate(chains):
+        for chain2 in chains[i+1:]:
+            for residue1 in chain1:
+                for atom1 in residue1:
+                    for residue2 in chain2:
+                        for atom2 in residue2:
+                            distance = atom1 - atom2
+                            if distance < distance_cutoff:
+                                interactions.add((chain1.id, chain2.id))
+                                pair_count += 1
+                                if pair_count > max_pairs:
+                                    return list(interactions)
+                                break  # Only need one contact to count as interacting
+                        else:
+                            continue
+                        break
+                else:
+                    continue
+                break
+    return list(interactions)
+
 def create_ppi_network(interactions):
     G = nx.Graph()
     G.add_edges_from(interactions)
     return G
 
 def visualize_ppi_network(G):
-    plt.figure(figsize=(10, 8))
+    plt.figure(figsize=(7, 5))
     pos = nx.spring_layout(G)
     nx.draw_networkx_nodes(G, pos, node_size=700, node_color='lightblue')
     nx.draw_networkx_edges(G, pos, width=2, alpha=0.5, edge_color='gray')
-    nx.draw_networkx_labels(G, pos, font_size=12, font_family='sans-serif')
-    plt.title("Protein-Protein Interaction Network")
+    nx.draw_networkx_labels(G, pos, font_size=14, font_family='sans-serif')
+    plt.title("Protein-Protein (Chain-Chain) Interaction Network")
     plt.axis('off')
     fig = plt.gcf()
     return fig
@@ -280,7 +312,9 @@ def visualize_ppi_network(G):
 
 def sidebar_controls():
     with st.sidebar:
-        st.image("https://media.istockphoto.com/id/1390037416/photo/chain-of-amino-acid-or-bio-molecules-called-protein-3d-illustration.jpg?s=612x612&w=0&k=20&c=xSkGolb7TDjqibvINrQYJ_rqrh4RIIzKIj3iMj4bZqI=", width=400)
+        st.image(
+            "https://media.istockphoto.com/id/1390037416/photo/chain-of-amino-acid-or-bio-molecules-called-protein-3d-illustration.jpg?s=612x612&w=0&k=20&c=xSkGolb7TDjqibvINrQYJ_rqrh4RIIzKIj3iMj4bZqI=",
+            width=400)
         st.title("Protein Molecule Mosaic")
         analysis_type = st.radio(
             "Analysis Mode:",
@@ -388,19 +422,24 @@ def main():
         # Tab 3: PPI Network
         with tab3:
             st.subheader("Protein-Protein Interaction (PPI) Network")
-            st.markdown("Visualize a simple example Protein-Protein Interaction network.")
-            # Example interaction data; in a real app, this could be user-uploaded or fetched
-            interactions = [
-                ('ProteinA', 'ProteinB'),
-                ('ProteinA', 'ProteinC'),
-                ('ProteinB', 'ProteinD'),
-                ('ProteinC', 'ProteinD'),
-                ('ProteinE', 'ProteinF'),
-                ('ProteinF', 'ProteinG'),
-            ]
-            ppi_network = create_ppi_network(interactions)
-            fig = visualize_ppi_network(ppi_network)
-            st.pyplot(fig)
+            st.markdown("Upload a multi-chain PDB file to visualize chain-chain interactions as a network graph.")
+            uploaded_ppi_pdb = st.file_uploader("Upload a multi-chain PDB file for PPI analysis", type=["pdb"], key="ppi_upload")
+            distance_cutoff = st.slider("Contact distance cutoff (Å)", 3.0, 10.0, 5.0, 0.5)
+            if uploaded_ppi_pdb is not None:
+                ppi_pdb_data = uploaded_ppi_pdb.read().decode("utf-8")
+                with st.spinner("Analyzing chain interactions..."):
+                    interactions = extract_chain_interactions(ppi_pdb_data, distance_cutoff=distance_cutoff)
+                if interactions:
+                    st.success(f"Found {len(interactions)} interacting chain pairs.")
+                    st.write("**Interacting Chains:**")
+                    st.write(interactions)
+                    G = create_ppi_network(interactions)
+                    fig = visualize_ppi_network(G)
+                    st.pyplot(fig)
+                else:
+                    st.warning("No chain-chain interactions found with the current cutoff.")
+            else:
+                st.info("Upload a multi-chain PDB file to see its chain interaction network.")
 
 if __name__ == "__main__":
     main()
