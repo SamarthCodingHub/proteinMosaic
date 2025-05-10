@@ -257,6 +257,47 @@ def superimpose_structures(pdb_data1, pdb_data2):
     aligned_structure_str = aligned_structure_io.getvalue()
 
     return aligned_structure_str, superimposer.rms
+def create_ppi_network(interactions):
+    """
+    Create a PPI network from a list of interactions.
+    
+    Parameters:
+    interactions (list of tuples): List of protein interactions (protein1, protein2).
+    
+    Returns:
+    G (networkx.Graph): The PPI network graph.
+    """
+    G = nx.Graph()
+    G.add_edges_from(interactions)
+    return G
+
+def visualize_ppi_network(G):
+    """
+    Visualize the PPI network using Matplotlib.
+    
+    Parameters:
+    G (networkx.Graph): The PPI network graph.
+    """
+    plt.figure(figsize=(10, 8))
+    pos = nx.spring_layout(G)  # positions for all nodes
+    nx.draw_networkx_nodes(G, pos, node_size=700, node_color='lightblue')
+    nx.draw_networkx_edges(G, pos, width=2, alpha=0.5, edge_color='gray')
+    nx.draw_networkx_labels(G, pos, font_size=12, font_family='sans-serif')
+    plt.title("Protein-Protein Interaction Network")
+    plt.axis('off')  # Turn off the axis
+    plt.show()
+# Example usage
+interactions = [
+    ('ProteinA', 'ProteinB'),
+    ('ProteinA', 'ProteinC'),
+    ('ProteinB', 'ProteinD'),
+    ('ProteinC', 'ProteinD'),
+    ('ProteinE', 'ProteinF'),
+    ('ProteinF', 'ProteinG'),
+]
+ppi_network = create_ppi_network(interactions)
+visualize_ppi_network(ppi_network)
+
 
 # ----------------------
 # UI Components
@@ -481,6 +522,34 @@ def main():
                 else:
                     st.info("No residues found for mutation.")
 
+    # PPI Analysis Section
+    st.header("Protein-Protein Interaction Analysis")
+    
+    # Input for protein sequence
+    protein_sequence = st.text_area("Enter Protein Sequence:")
+    
+    # Known interactions (this could be fetched from a database)
+    known_interactions = {
+        'ProteinA': 'MKTAYIAKQRQISFVKSHFSRQD',
+        'ProteinB': 'MKTAYIAKQRQISFVKSHFSRQD',
+        'ProteinC': 'MKTAYIAKQRQISFVKSHFSR',
+        # Add more known interactions as needed
+    }
+    if st.button("Predict PPIs"):
+        predicted_ppis = predict_ppi(protein_sequence, known_interactions)
+        st.write("Predicted PPIs:", predicted_ppis)
+        # Example interactions for visualization
+        interactions = [
+            ('ProteinA', 'ProteinB'),
+            ('ProteinA', 'ProteinC'),
+            ('ProteinB', 'ProteinD'),
+            ('ProteinC', 'ProteinD'),
+            ('ProteinE', 'ProteinF'),
+            ('ProteinF', 'ProteinG'),
+        ]
+        # Create and visualize the PPI network
+        ppi_network = create_ppi_network(interactions)
+        visualize_ppi_network(ppi_network)
     # Removed the redundant Structural Comparison section here
 
 def sidebar_controls():
