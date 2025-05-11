@@ -4,10 +4,10 @@ from Bio.PDB import PDBParser, PPBuilder, PDBIO, Superimposer
 from Bio.PDB.PDBExceptions import PDBException
 from io import StringIO
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import py3Dmol
 import biotite.structure.io as bsio
 import random
-import re
 
 # ----------------------
 # Protein Facts
@@ -51,6 +51,71 @@ def esmfold_predict_structure(sequence):
     struct = bsio.load_structure('predicted_tmp.pdb', extra_fields=["b_factor"])
     b_value = round(struct.b_factor.mean(), 4)
     return pdb_string, b_value
+
+def classify_ligand(residue):
+    resname = residue.get_resname().strip()
+    if len(resname) <= 2:
+        return 'ion'
+    elif any(atom.name in ['OXT', 'ND1', 'NE2'] for atom in residue):
+        return 'polydentate'
+    return 'monodentate'
+
+def extract_ligands(pdb_data):
+    parser = PDBParser(QUIET=True)
+    structure = parser.get_structure("temp", StringIO(pdb_data))
+    ligands = {'ion': [], 'monodentate': [], 'polydentate': []}
+    for residue in structure.get_residues():
+        if residue.id[0] != ' ':
+            ligand_type = classify_ligand(residue)
+            if ligand_type == 'ion':
+                ligands['ion'].append(residue.get_resname())
+            else:
+                ligands[ligand_type].append({
+                    'resname': residue.get_resname(),
+                    'chain': residue.parent.id,
+                    'resnum': residue.id[1],
+                    'type': ligand_type
+                })
+    return ligands
+
+def predict_active_sites(pdb_data):
+    parser = PDBParser(QUIET=True)
+    structure = parser.get_structure("temp", StringIO(pdb_data))
+    catalytic_residues = ['HIS', 'ASP', 'GLU', 'SER', 'CYS', 'LYS', 'TYR', 'ARG']
+    active_sites = []
+    ligand_atoms = []
+    for residue in structure.get_residues():
+        if residue.id[0] != ' ':
+            ligand_atoms.extend(list(residue.get_atoms()))
+    for residue in structure.get_residues():
+        if residue.id[0] == ' ' and residue.get_resname() in catalytic_residues:
+            res_atoms = list(residue.get_atoms())
+            for res_atom in res_atoms:
+                for lig_atom in ligand_atoms:
+                    distance = res_atom - lig_atom
+                    if distance < 3.0:
+                        active_sites.append({
+                            'resname': residue.get_resname(),
+                            'chain': residue.parent.id,
+                            'resnum': residue.id[1],
+                            'distance': f"{distance:.2f} Å"
+                        })
+                        break
+                else:
+                    continue
+                break
+    return active_sites
+
+def visualize_ligand_counts(ligands):
+    labels = list(ligands.keys())
+    counts = [len(ligands[ligand_type]) for ligand_type in labels]
+    fig = go.Figure(data=[
+        go.Bar(name='Ligand Counts', x=labels, y=counts)
+    ])
+    fig.update_layout(title='Ligand Type Counts',
+                      xaxis_title='Ligand Type',
+                      yaxis_title='Count')
+    return fig
 
 def get_phi_psi_angles(pdb_string):
     parser = PDBParser(QUIET=True)
@@ -118,6 +183,26 @@ def show_3d_structure(pdb_data, style='cartoon', highlight_ligands=True):
     view.setBackgroundColor('white')
     st.components.v1.html(view._make_html(), height=500, width=800)
 
+def mutate_residue_in_pdb(pdb_data, chain_id, resnum, new_resname):
+    lines = pdb_data.splitlines()
+    mutated_lines = []
+    for line in lines:
+        if line.startswith("ATOM") or line.startswith("HETATM"):
+            line_chain = line[21]
+            try:
+                line_resnum = int(line[22:26])
+            except ValueError:
+                mutated_lines.append(line)
+                continue
+            if line_chain == chain_id and line_resnum == resnum:
+                new_line = line[:17] + new_resname.ljust(3) + line[20:]
+                mutated_lines.append(new_line)
+            else:
+                mutated_lines.append(line)
+        else:
+            mutated_lines.append(line)
+    return "\n".join(mutated_lines)
+
 def superimpose_structures(pdb_data1, pdb_data2):
     parser = PDBParser(QUIET=True)
     io = PDBIO()
@@ -138,21 +223,29 @@ def superimpose_structures(pdb_data1, pdb_data2):
 
     common_atoms1 = []
     common_atoms2 = []
+    matched_residues = {}
+
     for chain1, resnum1, atom1 in atoms1_with_id:
         for chain2, resnum2, atom2 in atoms2_with_id:
             if chain1 == chain2 and resnum1 == resnum2:
                 common_atoms1.append(atom1)
                 common_atoms2.append(atom2)
+                matched_residues[(chain1, resnum1)] = True
                 break
 
     if not common_atoms1 or not common_atoms2 or len(common_atoms1) < 3:
+        st.error("Not enough common C-alpha atoms found for reliable superimposition.")
         return None, None
+
+    if len(common_atoms1) != len(common_atoms2):
+        st.warning(f"The number of common residues found is {len(common_atoms1)}, which is less than the total residues in each structure. The alignment might not be optimal.")
 
     superimposer = Superimposer()
     superimposer.set_atoms(common_atoms1, common_atoms2)
     try:
         superimposer.apply(structure2.get_atoms())
     except PDBException as e:
+        st.error(f"Superimposition failed: {e}")
         return None, None
 
     aligned_structure_io = StringIO()
@@ -162,13 +255,9 @@ def superimpose_structures(pdb_data1, pdb_data2):
 
     return aligned_structure_str, superimposer.rms
 
-def fetch_alphafold_pdb(uniprot_id):
-    url = f"https://alphafold.ebi.ac.uk/files/AF-{uniprot_id}-F1-model_v4.pdb"
-    r = requests.get(url)
-    if r.status_code == 200:
-        return r.text
-    else:
-        return None
+# ----------------------
+# UI Components
+# ----------------------
 
 def sidebar_controls():
     with st.sidebar:
@@ -205,13 +294,15 @@ def main():
         initial_sidebar_state="expanded"
     )
 
+    # --- INTERACTIVE FACTS & ESMFold HIGHLIGHT ---
     st.markdown("## 🧬 Welcome to Protein Molecule Mosaic!")
     st.info(
         "✨ **Did you know?** " + random.choice(PROTEIN_FACTS),
         icon="💡"
     )
     st.success(
-        "🚀 **You can predict protein 3D structure directly from sequence using ESMFold!**",
+        "🚀 **You can predict protein 3D structure directly from sequence using ESMFold!**\n"
+        "Select **'Predict from Sequence (ESMFold)'** below, paste your sequence, and click 'Predict Structure with ESMFold'.",
         icon="🧠"
     )
     st.markdown("---")
@@ -222,13 +313,8 @@ def main():
     with col1:
         st.header("Protein Palette")
 
-        tab1, tab2, tab3 = st.tabs([
-            "Single Structure Analysis", 
-            "Structural Comparison", 
-            "ESMFold vs AlphaFold2"
-        ])
+        tab1, tab2 = st.tabs(["Single Structure Analysis", "Structural Comparison"])
 
-        # --- TAB 1: SINGLE STRUCTURE ---
         with tab1:
             st.subheader("Analyze Single Structure")
             input_mode_single = st.radio(
@@ -288,7 +374,6 @@ def main():
                         st.write("Ramachandran Region Analysis:")
                         st.write(ramachandran_analysis)
 
-        # --- TAB 2: STRUCTURAL COMPARISON ---
         with tab2:
             st.subheader("Structural Comparison")
             uploaded_pdb1 = st.file_uploader("Upload the first PDB file", type=["pdb"], key="pdb1_compare")
@@ -310,48 +395,6 @@ def main():
                         show_3d_structure(aligned_structure)
                 else:
                     st.error("Superimposition failed.")
-
-        # --- TAB 3: ESMFold vs AlphaFold2 (AlphaFold DB) ---
-        with tab3:
-            st.subheader("Compare ESMFold and AlphaFold2 Predictions")
-            st.write("Enter a UniProt accession (e.g. P69905 for human hemoglobin subunit alpha) or a protein name. The app will fetch the AlphaFold2 model if available, and predict with ESMFold.")
-
-            user_input = st.text_input("Enter UniProt Accession or Protein Name", value="P69905")
-            sequence = st.text_area("Paste your protein sequence (1-letter code):", height=200, value="")
-
-            if st.button("Predict and Compare"):
-                # Try to extract UniProt accession from input
-                match = re.search(r"[A-NR-Z0-9]{6,10}", user_input)
-                uniprot_id = match.group(0) if match else None
-
-                af2_pdb = None
-                if uniprot_id:
-                    with st.spinner(f"Fetching AlphaFold2 model for {uniprot_id}..."):
-                        af2_pdb = fetch_alphafold_pdb(uniprot_id)
-
-                with st.spinner("Predicting with ESMFold..."):
-                    esm_pdb, esm_plddt = esmfold_predict_structure(sequence)
-
-                if esm_pdb and af2_pdb:
-                    st.success("Both structures ready!")
-                    colA, colB = st.columns(2)
-                    with colA:
-                        st.markdown("**ESMFold Prediction**")
-                        show_3d_structure(esm_pdb)
-                        st.download_button("Download ESMFold PDB", esm_pdb, file_name='esmfold_predicted.pdb', mime='text/plain')
-                    with colB:
-                        st.markdown("**AlphaFold2 Model (AlphaFold DB)**")
-                        show_3d_structure(af2_pdb)
-                        st.download_button("Download AlphaFold2 PDB", af2_pdb, file_name='alphafold2_db.pdb', mime='text/plain')
-                    aligned_af2, rmsd = superimpose_structures(esm_pdb, af2_pdb)
-                    if rmsd is not None:
-                        st.info(f"**RMSD between ESMFold and AlphaFold2 models:** {rmsd:.2f} Å")
-                    else:
-                        st.warning("Superimposition failed or not enough matching residues for RMSD.")
-                elif not af2_pdb:
-                    st.warning("AlphaFold2 model not found for the provided UniProt accession.")
-                else:
-                    st.error("Prediction failed for ESMFold.")
 
 if __name__ == "__main__":
     main()
