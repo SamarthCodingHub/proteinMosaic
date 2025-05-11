@@ -8,7 +8,8 @@ import plotly.graph_objects as go
 import py3Dmol
 import biotite.structure.io as bsio
 import random
-import time 
+import time
+
 # ----------------------
 # Protein Facts
 # ----------------------
@@ -52,7 +53,6 @@ def esmfold_predict_structure(sequence):
     b_value = round(struct.b_factor.mean(), 4)
     return pdb_string, b_value
 
-
 def colabfold_predict_structure(sequence):
     api_url = "https://api.colabfold.com/predict"
     payload = {"sequence": sequence, "model": "AlphaFold2-ptm"}
@@ -75,7 +75,6 @@ def colabfold_predict_structure(sequence):
     except Exception as e:
         st.error(f"ColabFold prediction failed: {str(e)}")
         return None, None
-
 
 def classify_ligand(residue):
     resname = residue.get_resname().strip()
@@ -230,11 +229,10 @@ def mutate_residue_in_pdb(pdb_data, chain_id, resnum, new_resname):
 
 def superimpose_structures(pdb_data1, pdb_data2):
     parser = PDBParser(QUIET=True)
-    io = PDBIO()  # Create a PDBIO object
+    io = PDBIO()
     structure1 = parser.get_structure("structure1", StringIO(pdb_data1))
     structure2 = parser.get_structure("structure2", StringIO(pdb_data2))
 
-    # Function to extract C-alpha atoms with chain and residue info
     def get_ca_atoms_with_id(structure):
         atoms = []
         for model in structure:
@@ -247,7 +245,6 @@ def superimpose_structures(pdb_data1, pdb_data2):
     atoms1_with_id = get_ca_atoms_with_id(structure1)
     atoms2_with_id = get_ca_atoms_with_id(structure2)
 
-    # Identify common C-alpha atoms based on chain and residue number
     common_atoms1 = []
     common_atoms2 = []
     matched_residues = {}
@@ -258,7 +255,7 @@ def superimpose_structures(pdb_data1, pdb_data2):
                 common_atoms1.append(atom1)
                 common_atoms2.append(atom2)
                 matched_residues[(chain1, resnum1)] = True
-                break  # Move to the next atom in structure1
+                break
 
     if not common_atoms1 or not common_atoms2 or len(common_atoms1) < 3:
         st.error("Not enough common C-alpha atoms found for reliable superimposition.")
@@ -275,7 +272,6 @@ def superimpose_structures(pdb_data1, pdb_data2):
         st.error(f"Superimposition failed: {e}")
         return None, None
 
-    # Save the aligned structure to a string
     aligned_structure_io = StringIO()
     io.set_structure(structure2)
     io.save(aligned_structure_io)
@@ -322,7 +318,6 @@ def main():
         initial_sidebar_state="expanded"
     )
 
-    # --- INTERACTIVE FACTS & ESMFold HIGHLIGHT ---
     st.markdown("## 🧬 Welcome to Protein Molecule Mosaic!")
     st.info(
         "✨ **Did you know?** " + random.choice(PROTEIN_FACTS),
@@ -486,3 +481,6 @@ def main():
                         st.warning("Superimposition failed or not enough matching residues for RMSD.")
                 else:
                     st.error("Prediction failed for one or both models.")
+
+if __name__ == "__main__":
+    main()
