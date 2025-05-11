@@ -4,10 +4,10 @@ from Bio.PDB import PDBParser, PPBuilder, PDBIO, Superimposer
 from Bio.PDB.PDBExceptions import PDBException
 from io import StringIO
 import matplotlib.pyplot as plt
-import plotly.graph_objects as go
 import py3Dmol
 import biotite.structure.io as bsio
 import random
+import re
 
 # ----------------------
 # Protein Facts
@@ -138,29 +138,21 @@ def superimpose_structures(pdb_data1, pdb_data2):
 
     common_atoms1 = []
     common_atoms2 = []
-    matched_residues = {}
-
     for chain1, resnum1, atom1 in atoms1_with_id:
         for chain2, resnum2, atom2 in atoms2_with_id:
             if chain1 == chain2 and resnum1 == resnum2:
                 common_atoms1.append(atom1)
                 common_atoms2.append(atom2)
-                matched_residues[(chain1, resnum1)] = True
                 break
 
     if not common_atoms1 or not common_atoms2 or len(common_atoms1) < 3:
-        st.error("Not enough common C-alpha atoms found for reliable superimposition.")
         return None, None
-
-    if len(common_atoms1) != len(common_atoms2):
-        st.warning(f"The number of common residues found is {len(common_atoms1)}, which is less than the total residues in each structure. The alignment might not be optimal.")
 
     superimposer = Superimposer()
     superimposer.set_atoms(common_atoms1, common_atoms2)
     try:
         superimposer.apply(structure2.get_atoms())
     except PDBException as e:
-        st.error(f"Superimposition failed: {e}")
         return None, None
 
     aligned_structure_io = StringIO()
@@ -169,6 +161,14 @@ def superimpose_structures(pdb_data1, pdb_data2):
     aligned_structure_str = aligned_structure_io.getvalue()
 
     return aligned_structure_str, superimposer.rms
+
+def fetch_alphafold_pdb(uniprot_id):
+    url = f"https://alphafold.ebi.ac.uk/files/AF-{uniprot_id}-F1-model_v4.pdb"
+    r = requests.get(url)
+    if r.status_code == 200:
+        return r.text
+    else:
+        return None
 
 def sidebar_controls():
     with st.sidebar:
@@ -193,6 +193,10 @@ def sidebar_controls():
             'render_style': render_style,
             'show_ligands': show_ligands,
         }
+
+# ----------------------
+# Main App Logic
+# ----------------------
 
 def main():
     st.set_page_config(
@@ -307,43 +311,47 @@ def main():
                 else:
                     st.error("Superimposition failed.")
 
-        # --- TAB 3: ESMFold vs AlphaFold2 (User Upload) ---
+        # --- TAB 3: ESMFold vs AlphaFold2 (AlphaFold DB) ---
         with tab3:
-            st.subheader("Compare ESMFold and AlphaFold2 Models")
-            st.write("Paste your sequence to predict with ESMFold, and upload an AlphaFold2 model from AlphaFold DB for comparison.")
+            st.subheader("Compare ESMFold and AlphaFold2 Predictions")
+            st.write("Enter a UniProt accession (e.g. P69905 for human hemoglobin subunit alpha) or a protein name. The app will fetch the AlphaFold2 model if available, and predict with ESMFold.")
 
-            example_seq = "MGSSHHHHHHSSGLVPRGSHMRGPNPTAASLEASAGPFTVRSFTVSRPSGYGAGTVYYPTNAGGTVGAIAIVPGYTARQSSIKWWGPRLASHGFVVITIDTNSTLDQPSSRSSQQMAALRQVASLNGTSSSPIYGKVDTARMGVMGWSMGGGGSLISAANNPSLKAAAPQAPWDSSTNFSSVTVPTLIFACENDSIAPVNSSALPIYDSMSRNAKQFLEINGGSHSCANSGNSNQALIGKKGVAWMKRFMDNDTRYSTFACENPNSTRVSDFRTANCSLEDPAANKARKEAELAAATAEQ"
-            sequence = st.text_area("Paste your protein sequence (1-letter code):", value=example_seq, height=200, key="compare_seq")
-            uploaded_af2 = st.file_uploader("Upload AlphaFold2 PDB file", type=["pdb"], key="af2_compare")
+            user_input = st.text_input("Enter UniProt Accession or Protein Name", value="P69905")
+            sequence = st.text_area("Paste your protein sequence (1-letter code):", height=200, value="")
 
-            if st.button("Predict with ESMFold and Compare"):
+            if st.button("Predict and Compare"):
+                # Try to extract UniProt accession from input
+                match = re.search(r"[A-NR-Z0-9]{6,10}", user_input)
+                uniprot_id = match.group(0) if match else None
+
+                af2_pdb = None
+                if uniprot_id:
+                    with st.spinner(f"Fetching AlphaFold2 model for {uniprot_id}..."):
+                        af2_pdb = fetch_alphafold_pdb(uniprot_id)
+
                 with st.spinner("Predicting with ESMFold..."):
-                    pdb_esm, plddt_esm = esmfold_predict_structure(sequence)
+                    esm_pdb, esm_plddt = esmfold_predict_structure(sequence)
 
-                if pdb_esm and uploaded_af2 is not None:
-                    pdb_af2 = uploaded_af2.read().decode("utf-8")
+                if esm_pdb and af2_pdb:
                     st.success("Both structures ready!")
-
-                    aligned_af2, rmsd = superimpose_structures(pdb_esm, pdb_af2)
-
                     colA, colB = st.columns(2)
                     with colA:
                         st.markdown("**ESMFold Prediction**")
-                        show_3d_structure(pdb_esm)
-                        st.download_button("Download ESMFold PDB", pdb_esm, file_name='esmfold_predicted.pdb', mime='text/plain')
+                        show_3d_structure(esm_pdb)
+                        st.download_button("Download ESMFold PDB", esm_pdb, file_name='esmfold_predicted.pdb', mime='text/plain')
                     with colB:
-                        st.markdown("**AlphaFold2 Model (Uploaded)**")
-                        if aligned_af2:
-                            show_3d_structure(aligned_af2)
-                        else:
-                            show_3d_structure(pdb_af2)
-                        st.download_button("Download AlphaFold2 PDB", pdb_af2, file_name='alphafold2_uploaded.pdb', mime='text/plain')
+                        st.markdown("**AlphaFold2 Model (AlphaFold DB)**")
+                        show_3d_structure(af2_pdb)
+                        st.download_button("Download AlphaFold2 PDB", af2_pdb, file_name='alphafold2_db.pdb', mime='text/plain')
+                    aligned_af2, rmsd = superimpose_structures(esm_pdb, af2_pdb)
                     if rmsd is not None:
                         st.info(f"**RMSD between ESMFold and AlphaFold2 models:** {rmsd:.2f} Å")
                     else:
                         st.warning("Superimposition failed or not enough matching residues for RMSD.")
+                elif not af2_pdb:
+                    st.warning("AlphaFold2 model not found for the provided UniProt accession.")
                 else:
-                    st.error("Prediction failed or AlphaFold2 model not uploaded.")
+                    st.error("Prediction failed for ESMFold.")
 
 if __name__ == "__main__":
     main()
