@@ -8,7 +8,6 @@ import plotly.graph_objects as go
 import py3Dmol
 import biotite.structure.io as bsio
 import random
-import time
 
 # ----------------------
 # Protein Facts
@@ -52,94 +51,6 @@ def esmfold_predict_structure(sequence):
     struct = bsio.load_structure('predicted_tmp.pdb', extra_fields=["b_factor"])
     b_value = round(struct.b_factor.mean(), 4)
     return pdb_string, b_value
-
-def colabfold_predict_structure(sequence):
-    api_url = "https://api.colabfold.com/predict"
-    payload = {"sequence": sequence, "model": "AlphaFold2-ptm"}
-    try:
-        response = requests.post(api_url, json=payload)
-        if response.status_code != 200:
-            st.error("ColabFold API error: " + response.text)
-            return None, None
-        job_id = response.json()["id"]
-        # Poll for result (wait up to 60 seconds)
-        for _ in range(30):
-            time.sleep(2)
-            status = requests.get(f"https://api.colabfold.com/predict/{job_id}/status")
-            if status.json().get("status") == "completed":
-                pdb_url = status.json()["result"]["pdb"]
-                pdb_data = requests.get(pdb_url).text
-                return pdb_data, None
-        st.error("ColabFold prediction timed out.")
-        return None, None
-    except Exception as e:
-        st.error(f"ColabFold prediction failed: {str(e)}")
-        return None, None
-
-def classify_ligand(residue):
-    resname = residue.get_resname().strip()
-    if len(resname) <= 2:
-        return 'ion'
-    elif any(atom.name in ['OXT', 'ND1', 'NE2'] for atom in residue):
-        return 'polydentate'
-    return 'monodentate'
-
-def extract_ligands(pdb_data):
-    parser = PDBParser(QUIET=True)
-    structure = parser.get_structure("temp", StringIO(pdb_data))
-    ligands = {'ion': [], 'monodentate': [], 'polydentate': []}
-    for residue in structure.get_residues():
-        if residue.id[0] != ' ':
-            ligand_type = classify_ligand(residue)
-            if ligand_type == 'ion':
-                ligands['ion'].append(residue.get_resname())
-            else:
-                ligands[ligand_type].append({
-                    'resname': residue.get_resname(),
-                    'chain': residue.parent.id,
-                    'resnum': residue.id[1],
-                    'type': ligand_type
-                })
-    return ligands
-
-def predict_active_sites(pdb_data):
-    parser = PDBParser(QUIET=True)
-    structure = parser.get_structure("temp", StringIO(pdb_data))
-    catalytic_residues = ['HIS', 'ASP', 'GLU', 'SER', 'CYS', 'LYS', 'TYR', 'ARG']
-    active_sites = []
-    ligand_atoms = []
-    for residue in structure.get_residues():
-        if residue.id[0] != ' ':
-            ligand_atoms.extend(list(residue.get_atoms()))
-    for residue in structure.get_residues():
-        if residue.id[0] == ' ' and residue.get_resname() in catalytic_residues:
-            res_atoms = list(residue.get_atoms())
-            for res_atom in res_atoms:
-                for lig_atom in ligand_atoms:
-                    distance = res_atom - lig_atom
-                    if distance < 3.0:
-                        active_sites.append({
-                            'resname': residue.get_resname(),
-                            'chain': residue.parent.id,
-                            'resnum': residue.id[1],
-                            'distance': f"{distance:.2f} Å"
-                        })
-                        break
-                else:
-                    continue
-                break
-    return active_sites
-
-def visualize_ligand_counts(ligands):
-    labels = list(ligands.keys())
-    counts = [len(ligands[ligand_type]) for ligand_type in labels]
-    fig = go.Figure(data=[
-        go.Bar(name='Ligand Counts', x=labels, y=counts)
-    ])
-    fig.update_layout(title='Ligand Type Counts',
-                      xaxis_title='Ligand Type',
-                      yaxis_title='Count')
-    return fig
 
 def get_phi_psi_angles(pdb_string):
     parser = PDBParser(QUIET=True)
@@ -207,26 +118,6 @@ def show_3d_structure(pdb_data, style='cartoon', highlight_ligands=True):
     view.setBackgroundColor('white')
     st.components.v1.html(view._make_html(), height=500, width=800)
 
-def mutate_residue_in_pdb(pdb_data, chain_id, resnum, new_resname):
-    lines = pdb_data.splitlines()
-    mutated_lines = []
-    for line in lines:
-        if line.startswith("ATOM") or line.startswith("HETATM"):
-            line_chain = line[21]
-            try:
-                line_resnum = int(line[22:26])
-            except ValueError:
-                mutated_lines.append(line)
-                continue
-            if line_chain == chain_id and line_resnum == resnum:
-                new_line = line[:17] + new_resname.ljust(3) + line[20:]
-                mutated_lines.append(new_line)
-            else:
-                mutated_lines.append(line)
-        else:
-            mutated_lines.append(line)
-    return "\n".join(mutated_lines)
-
 def superimpose_structures(pdb_data1, pdb_data2):
     parser = PDBParser(QUIET=True)
     io = PDBIO()
@@ -279,10 +170,6 @@ def superimpose_structures(pdb_data1, pdb_data2):
 
     return aligned_structure_str, superimposer.rms
 
-# ----------------------
-# UI Components
-# ----------------------
-
 def sidebar_controls():
     with st.sidebar:
         st.image("https://media.istockphoto.com/id/1390037416/photo/chain-of-amino-acid-or-bio-molecules-called-protein-3d-illustration.jpg?s=612x612&w=0&k=20&c=xSkGolb7TDjqibvINrQYJ_rqrh4RIIzKIj3iMj4bZqI=", width=400)
@@ -307,10 +194,6 @@ def sidebar_controls():
             'show_ligands': show_ligands,
         }
 
-# ----------------------
-# Main App Logic
-# ----------------------
-
 def main():
     st.set_page_config(
         page_title="Protein Molecule Mosaic",
@@ -324,7 +207,7 @@ def main():
         icon="💡"
     )
     st.success(
-        "🚀 **You can predict protein 3D structure directly from sequence using ESMFold or AlphaFold2 (ColabFold)!**",
+        "🚀 **You can predict protein 3D structure directly from sequence using ESMFold!**",
         icon="🧠"
     )
     st.markdown("---")
@@ -346,7 +229,7 @@ def main():
             st.subheader("Analyze Single Structure")
             input_mode_single = st.radio(
                 "Choose input mode:",
-                ["Upload PDB", "Fetch by PDB ID", "Predict from Sequence"],
+                ["Upload PDB", "Fetch by PDB ID", "Predict from Sequence (ESMFold)"],
                 key="single_input_mode"
             )
             pdb_data_single = None
@@ -366,24 +249,20 @@ def main():
                     source_single = "pdbid"
                     if pdb_data_single:
                         st.success(f"PDB ID {pdb_id} loaded from RCSB.")
-            elif input_mode_single == "Predict from Sequence":
+            elif input_mode_single == "Predict from Sequence (ESMFold)":
                 example_seq = "MGSSHHHHHHSSGLVPRGSHMRGPNPTAASLEASAGPFTVRSFTVSRPSGYGAGTVYYPTNAGGTVGAIAIVPGYTARQSSIKWWGPRLASHGFVVITIDTNSTLDQPSSRSSQQMAALRQVASLNGTSSSPIYGKVDTARMGVMGWSMGGGGSLISAANNPSLKAAAPQAPWDSSTNFSSVTVPTLIFACENDSIAPVNSSALPIYDSMSRNAKQFLEINGGSHSCANSGNSNQALIGKKGVAWMKRFMDNDTRYSTFACENPNSTRVSDFRTANCSLEDPAANKARKEAELAAATAEQ"
                 sequence = st.text_area("Paste your protein sequence (1-letter code):", value=example_seq, height=200)
-                pred_method = st.radio("Choose Prediction Method:", ["ESMFold", "AlphaFold2 (ColabFold)"])
-                if st.button(f"Predict Structure with {pred_method}"):
+                if st.button("Predict Structure with ESMFold"):
                     with st.spinner("Predicting structure..."):
-                        if pred_method == "ESMFold":
-                            pdb_data_single, plddt = esmfold_predict_structure(sequence)
-                            source_single = "esmfold"
-                        else:
-                            pdb_data_single, plddt = colabfold_predict_structure(sequence)
-                            source_single = "colabfold"
+                        pdb_data_single, plddt = esmfold_predict_structure(sequence)
+                        source_single = "esmfold"
                     if pdb_data_single:
-                        st.success(f"Structure predicted with {pred_method}!")
+                        st.success("Structure predicted with ESMFold!")
+                        st.info(f"Average pLDDT: {plddt}")
                         st.download_button(
                             label="Download Predicted PDB",
                             data=pdb_data_single,
-                            file_name=f'{source_single}_predicted.pdb',
+                            file_name='esmfold_predicted.pdb',
                             mime='text/plain',
                         )
                     else:
@@ -428,59 +307,43 @@ def main():
                 else:
                     st.error("Superimposition failed.")
 
-        # --- TAB 3: ESMFold vs AlphaFold2 (ColabFold) ---
+        # --- TAB 3: ESMFold vs AlphaFold2 (User Upload) ---
         with tab3:
-            st.subheader("Compare ESMFold and AlphaFold2 (ColabFold) Predictions")
-            st.write("Paste your sequence below and compare the structures predicted by ESMFold and AlphaFold2 (ColabFold) side by side.")
+            st.subheader("Compare ESMFold and AlphaFold2 Models")
+            st.write("Paste your sequence to predict with ESMFold, and upload an AlphaFold2 model from AlphaFold DB for comparison.")
 
             example_seq = "MGSSHHHHHHSSGLVPRGSHMRGPNPTAASLEASAGPFTVRSFTVSRPSGYGAGTVYYPTNAGGTVGAIAIVPGYTARQSSIKWWGPRLASHGFVVITIDTNSTLDQPSSRSSQQMAALRQVASLNGTSSSPIYGKVDTARMGVMGWSMGGGGSLISAANNPSLKAAAPQAPWDSSTNFSSVTVPTLIFACENDSIAPVNSSALPIYDSMSRNAKQFLEINGGSHSCANSGNSNQALIGKKGVAWMKRFMDNDTRYSTFACENPNSTRVSDFRTANCSLEDPAANKARKEAELAAATAEQ"
-            sequence = st.text_area(
-                "Paste your protein sequence (1-letter code):", 
-                value=example_seq, 
-                height=200, 
-                key="compare_seq"
-            )
+            sequence = st.text_area("Paste your protein sequence (1-letter code):", value=example_seq, height=200, key="compare_seq")
+            uploaded_af2 = st.file_uploader("Upload AlphaFold2 PDB file", type=["pdb"], key="af2_compare")
 
-            if st.button("Predict with Both Models"):
+            if st.button("Predict with ESMFold and Compare"):
                 with st.spinner("Predicting with ESMFold..."):
                     pdb_esm, plddt_esm = esmfold_predict_structure(sequence)
-                with st.spinner("Predicting with AlphaFold2 (ColabFold)..."):
-                    pdb_af2, plddt_af2 = colabfold_predict_structure(sequence)
 
-                if pdb_esm and pdb_af2:
-                    st.success("Both predictions completed!")
+                if pdb_esm and uploaded_af2 is not None:
+                    pdb_af2 = uploaded_af2.read().decode("utf-8")
+                    st.success("Both structures ready!")
 
-                    # Superimpose and calculate RMSD
                     aligned_af2, rmsd = superimpose_structures(pdb_esm, pdb_af2)
 
                     colA, colB = st.columns(2)
                     with colA:
                         st.markdown("**ESMFold Prediction**")
                         show_3d_structure(pdb_esm)
-                        st.download_button(
-                            label="Download ESMFold PDB",
-                            data=pdb_esm,
-                            file_name='esmfold_predicted.pdb',
-                            mime='text/plain',
-                        )
+                        st.download_button("Download ESMFold PDB", pdb_esm, file_name='esmfold_predicted.pdb', mime='text/plain')
                     with colB:
-                        st.markdown("**AlphaFold2 (ColabFold) Prediction**")
+                        st.markdown("**AlphaFold2 Model (Uploaded)**")
                         if aligned_af2:
                             show_3d_structure(aligned_af2)
                         else:
                             show_3d_structure(pdb_af2)
-                        st.download_button(
-                            label="Download AlphaFold2 PDB",
-                            data=pdb_af2,
-                            file_name='alphafold2_predicted.pdb',
-                            mime='text/plain',
-                        )
+                        st.download_button("Download AlphaFold2 PDB", pdb_af2, file_name='alphafold2_uploaded.pdb', mime='text/plain')
                     if rmsd is not None:
                         st.info(f"**RMSD between ESMFold and AlphaFold2 models:** {rmsd:.2f} Å")
                     else:
                         st.warning("Superimposition failed or not enough matching residues for RMSD.")
                 else:
-                    st.error("Prediction failed for one or both models.")
+                    st.error("Prediction failed or AlphaFold2 model not uploaded.")
 
 if __name__ == "__main__":
     main()
