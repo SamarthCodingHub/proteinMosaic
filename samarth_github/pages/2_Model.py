@@ -167,8 +167,8 @@ def ramachandran_region_analysis(phi_psi_list):
         "total": total
     }
 
-def show_3d_structure(pdb_data, style='cartoon', highlight_ligands=True):
-    view = py3Dmol.view(width=800, height=500)
+def show_3d_structure(pdb_data, style='cartoon', highlight_ligands=True, width=800, height=500):
+    view = py3Dmol.view(width=width, height=height)
     view.addModel(pdb_data, 'pdb')
     if style == 'cartoon':
         view.setStyle({'cartoon': {'color': 'spectrum'}})
@@ -181,7 +181,7 @@ def show_3d_structure(pdb_data, style='cartoon', highlight_ligands=True):
         view.addStyle({'hetflag': True}, {'stick': {'colorscheme': 'greenCarbon', 'radius': 0.3}})
     view.zoomTo()
     view.setBackgroundColor('white')
-    st.components.v1.html(view._make_html(), height=500, width=800)
+    st.components.v1.html(view._make_html(), height=height, width=width)
 
 def mutate_residue_in_pdb(pdb_data, chain_id, resnum, new_resname):
     lines = pdb_data.splitlines()
@@ -389,10 +389,22 @@ def main():
                     colA, colB = st.columns(2)
                     with colA:
                         st.markdown("**Structure 1**")
-                        show_3d_structure(pdb_data1_compare)
+                        show_3d_structure(
+                            pdb_data1_compare,
+                            style=controls['render_style'],
+                            highlight_ligands=controls['show_ligands'],
+                            width=400,
+                            height=400
+                        )
                     with colB:
                         st.markdown("**Aligned Structure 2**")
-                        show_3d_structure(aligned_structure)
+                        show_3d_structure(
+                            aligned_structure,
+                            style=controls['render_style'],
+                            highlight_ligands=controls['show_ligands'],
+                            width=400,
+                            height=400
+                        )
                 else:
                     st.error("Superimposition failed.")
 
